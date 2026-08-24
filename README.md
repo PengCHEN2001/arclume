@@ -5,14 +5,16 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The first stage establishes a runnable foundation:
+The second stage establishes shared data contracts on top of the runnable
+foundation:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
 - A small asynchronous LLM client provides model transport.
+- `schemas/` defines shared API, state, context, and tool models.
 - Docker Compose reserves Redis and ChromaDB as future infrastructure services.
-- No Agent routing, memory workflow, tools, skills, or self-improvement loop is
-  implemented yet.
+- No Agent routing, memory persistence, context builder, tool execution, skills,
+  or self-improvement loop is implemented yet.
 
 ## Python environment
 

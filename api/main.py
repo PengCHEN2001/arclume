@@ -18,9 +18,8 @@ from typing import AsyncIterator
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel, Field
-
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
+from schemas.api import ChatRequest, ChatResponse
 
 
 load_dotenv()
@@ -30,29 +29,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("arclume.api")
-
-
-class ChatRequest(BaseModel):
-    """Input accepted by the first chat endpoint.
-
-    ``conversation_id`` is recorded as a request-level identifier only. It is
-    not a memory implementation yet; persistent conversation handling belongs
-    to a later project step.
-    """
-
-    message: str = Field(min_length=1, description="The user's message")
-    conversation_id: str | None = Field(
-        default=None,
-        description="Optional client-side conversation identifier",
-    )
-
-
-class ChatResponse(BaseModel):
-    """Stable response shape for the first API contract."""
-
-    message: str
-    model: str
-    conversation_id: str | None = None
 
 
 @asynccontextmanager
