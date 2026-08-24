@@ -1,0 +1,16 @@
+.venv/
+sources_read/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.env
+.env.*
+!.env.example
+
+logs/
+data/chroma/
+data/**/*.sqlite3
+.DS_Store
