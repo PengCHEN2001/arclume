@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The fifth stage adds Redis-backed short-term memory and AgentState persistence
-to the single-Agent customer-service flow:
+The sixth stage adds explicit Context construction between persistence and the
+single-Agent customer-service flow:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -16,14 +16,16 @@ to the single-Agent customer-service flow:
   model-independent Agent loop skeleton.
 - `agents/customer_service_agent.py` provides the first single-Agent behavior
   and sends a stable system prompt through `LLMClient`.
+- `core/context_builder.py` assembles the temporary model context from the
+  current message, conversation history, and AgentState.
 - `memory/` stores recent conversation messages and active-case `AgentState`
   records in Redis.
 - Docker Compose provides Redis for current memory and reserves ChromaDB for
   future retrieval and long-term memory.
-- No business Tool, Agent routing, context builder, skills, or self-improvement
-  loop is implemented yet.
-- The `/chat` endpoint now loads and saves short-term memory and AgentState for
-  each conversation before and after one model request.
+- No business Tool, Agent routing, context compression, skills, or
+  self-improvement loop is implemented yet.
+- The `/chat` endpoint now loads memory and AgentState, builds a temporary
+  Context, and saves the result around one model request.
 
 ## Python environment
 

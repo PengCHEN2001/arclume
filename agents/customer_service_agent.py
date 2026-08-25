@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 
+from core.context_builder import ContextBuilder
 from core.llm_utils import LLMClient
 from memory.conversation_memory import ConversationMemory
 from memory.state_store import StateStore
@@ -29,11 +30,13 @@ class CustomerServiceAgent:
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         memory: ConversationMemory | None = None,
         state_store: StateStore | None = None,
+        context_builder: ContextBuilder | None = None,
     ) -> None:
         self.llm = llm                         # Shared model transport
         self.system_prompt = system_prompt     # Stable instructions for this Agent
         self.memory = memory                   # Short-term conversation history
         self.state_store = state_store         # Persisted active-case state
+        self.context_builder = context_builder or ContextBuilder([system_prompt])
 
     async def respond(
         self,
@@ -42,11 +45,11 @@ class CustomerServiceAgent:
         user_id: str = "anonymous",
         conversation_id: str | None = None,
     ) -> str:
-        """Process one turn, including memory read/write when configured.
+        """Process one turn, including Context construction and persistence.
 
         The flow is: validate the message, load recent history and AgentState,
-        save the user message, call the model with history, save the reply, and
-        persist the updated active-case state. ContextBuilder, retrieval,
+        save the user message, build Context, call the model, save the reply,
+        and persist the updated active-case state. Compression, retrieval,
         Skills, routing, and Tool calls are still outside this step.
         """
 
@@ -79,12 +82,19 @@ class CustomerServiceAgent:
             )
             await self.state_store.save(state)
 
-        history_payload = [item.model_dump() for item in history]
-        llm_kwargs = {"system_prompt": self.system_prompt}
+        context = self.context_builder.build(
+            cleaned_message,
+            conversation_history=history,
+            state=state,
+        )
+        history_payload = self.context_builder.render_history(context)
+        llm_kwargs = {
+            "system_prompt": self.context_builder.render_system_prompt(context)
+        }
         if history_payload:
             llm_kwargs["history"] = history_payload
 
-        answer = await self.llm.chat(cleaned_message, **llm_kwargs)
+        answer = await self.llm.chat(context.user_message, **llm_kwargs)
 
         if conversation_id and self.memory:
             await self.memory.add_message(
