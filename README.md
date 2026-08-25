@@ -5,16 +5,20 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The second stage establishes shared data contracts on top of the runnable
-foundation:
+The third stage establishes the Harness boundary on top of the runnable
+foundation and shared data contracts:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
 - A small asynchronous LLM client provides model transport.
 - `schemas/` defines shared API, state, context, and tool models.
+- `harness/` separates policy decisions, Tool execution, tracing, and the
+  model-independent Agent loop skeleton.
 - Docker Compose reserves Redis and ChromaDB as future infrastructure services.
-- No Agent routing, memory persistence, context builder, tool execution, skills,
+- No business Tool, Agent routing, memory persistence, context builder, skills,
   or self-improvement loop is implemented yet.
+- The `/chat` endpoint still calls the LLM directly; the customer-service Agent
+  will connect it to the Harness in a later stage.
 
 ## Python environment
 
