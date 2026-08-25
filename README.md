@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The third stage establishes the Harness boundary on top of the runnable
-foundation and shared data contracts:
+The fourth stage adds the first single-Agent customer-service flow on top of
+the Harness-ready foundation and shared data contracts:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -14,11 +14,13 @@ foundation and shared data contracts:
 - `schemas/` defines shared API, state, context, and tool models.
 - `harness/` separates policy decisions, Tool execution, tracing, and the
   model-independent Agent loop skeleton.
+- `agents/customer_service_agent.py` provides the first single-Agent behavior
+  and sends a stable system prompt through `LLMClient`.
 - Docker Compose reserves Redis and ChromaDB as future infrastructure services.
 - No business Tool, Agent routing, memory persistence, context builder, skills,
   or self-improvement loop is implemented yet.
-- The `/chat` endpoint still calls the LLM directly; the customer-service Agent
-  will connect it to the Harness in a later stage.
+- The `/chat` endpoint now calls the single customer-service Agent, which makes
+  one model request without memory or Tool calls.
 
 ## Python environment
 
@@ -52,7 +54,7 @@ python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 Useful endpoints:
 
 - `GET /health` — process and configuration status.
-- `POST /chat` — direct model request for the first vertical slice.
+- `POST /chat` — single-Agent customer-service request.
 - `GET /docs` — interactive API documentation.
 
 The service can start without a model key so the HTTP layer can be inspected.

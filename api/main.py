@@ -1,15 +1,15 @@
-"""Arclume's first HTTP entry point.
+"""Arclume's HTTP entry point for the first single-Agent flow.
 
 This module intentionally implements only the smallest useful vertical slice:
 
 1. Create a FastAPI application.
 2. Load configuration from environment variables.
 3. Expose a health endpoint for local and container checks.
-4. Expose a direct chat endpoint backed by a provider-agnostic LLM client.
+4. Expose a chat endpoint backed by CustomerServiceAgent.
 
-Agent routing, memory, tools, skills, retrieval, and evaluation are deliberately
-outside this first step. Keeping the entry point small makes the first runtime
-failure easy to understand before those subsystems are introduced.
+Memory, tools, skills, retrieval, routing, and evaluation are deliberately
+outside this step. The API owns application resources while the Agent owns the
+first customer-service behavior.
 """
 
 from contextlib import asynccontextmanager
@@ -18,6 +18,7 @@ from typing import AsyncIterator
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from agents.customer_service_agent import CustomerServiceAgent
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
 from schemas.api import ChatRequest, ChatResponse
 
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
 
     app.state.llm = LLMClient.from_environment()
+    app.state.agent = CustomerServiceAgent(llm=app.state.llm)
     logger.info("Arclume API started; LLM configured=%s", app.state.llm.is_configured)
     yield
     await app.state.llm.close()
@@ -76,16 +78,16 @@ async def health(request: Request) -> dict[str, object]:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-    """Send one message directly to the configured LLM.
+    """Send one message through the single customer-service Agent.
 
-    This endpoint is intentionally not an Agent loop yet. It proves that the
-    API boundary, request validation, configuration, and model transport work
-    before orchestration logic is added.
+    The Agent currently performs one model request. Memory, ContextBuilder,
+    Tool calls, and multi-Agent routing are introduced in later stages.
     """
 
     llm: LLMClient = request.app.state.llm
+    agent: CustomerServiceAgent = request.app.state.agent
     try:
-        answer = await llm.chat(payload.message)
+        answer = await agent.respond(payload.message)
     except LLMConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except LLMRequestError as exc:
