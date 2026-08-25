@@ -78,8 +78,13 @@ class LLMClient:
 
         await self._http.aclose()
 
-    async def chat(self, message: str, system_prompt: str | None = None) -> str:
-        """Send one user message and return the provider's text response.
+    async def chat(
+        self,
+        message: str,
+        system_prompt: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
+        """Send a system prompt, optional history, and one user message.
 
         The payload follows the common OpenAI-compatible chat-completions shape.
         Providers with a different protocol can be supported later by adding a
@@ -95,6 +100,8 @@ class LLMClient:
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": message})
 
         payload: dict[str, Any] = {

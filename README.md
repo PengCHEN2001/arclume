@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The fourth stage adds the first single-Agent customer-service flow on top of
-the Harness-ready foundation and shared data contracts:
+The fifth stage adds Redis-backed short-term memory and AgentState persistence
+to the single-Agent customer-service flow:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -16,11 +16,14 @@ the Harness-ready foundation and shared data contracts:
   model-independent Agent loop skeleton.
 - `agents/customer_service_agent.py` provides the first single-Agent behavior
   and sends a stable system prompt through `LLMClient`.
-- Docker Compose reserves Redis and ChromaDB as future infrastructure services.
-- No business Tool, Agent routing, memory persistence, context builder, skills,
-  or self-improvement loop is implemented yet.
-- The `/chat` endpoint now calls the single customer-service Agent, which makes
-  one model request without memory or Tool calls.
+- `memory/` stores recent conversation messages and active-case `AgentState`
+  records in Redis.
+- Docker Compose provides Redis for current memory and reserves ChromaDB for
+  future retrieval and long-term memory.
+- No business Tool, Agent routing, context builder, skills, or self-improvement
+  loop is implemented yet.
+- The `/chat` endpoint now loads and saves short-term memory and AgentState for
+  each conversation before and after one model request.
 
 ## Python environment
 
@@ -54,11 +57,12 @@ python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 Useful endpoints:
 
 - `GET /health` — process and configuration status.
-- `POST /chat` — single-Agent customer-service request.
+- `POST /chat` — single-Agent customer-service request with Redis persistence.
 - `GET /docs` — interactive API documentation.
 
 The service can start without a model key so the HTTP layer can be inspected.
-The chat endpoint requires `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`.
+The chat endpoint requires `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, and a
+reachable Redis instance.
 
 ## Run infrastructure and the API with Docker
 
@@ -68,6 +72,5 @@ docker compose ps
 docker compose logs -f api
 ```
 
-The first stage starts the API, Redis, and ChromaDB containers. Redis and
-ChromaDB are infrastructure reservations; application code will connect to
-them after the memory and retrieval stages are designed.
+The current application uses Redis for short-term memory and AgentState. ChromaDB
+remains reserved for the later retrieval and long-term memory stages.

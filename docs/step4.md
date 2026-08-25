@@ -91,20 +91,64 @@ LLMClient.chat(message, system_prompt=None)
 当前实际链路是：
 
 ```text
-用户问题
-  ↓
-FastAPI /chat
-  ↓
-CustomerServiceAgent.respond()
-  ↓
-LLMClient.chat(system_prompt=...)
-  ↓
-模型服务
-  ↓
-ChatResponse
+【一次 POST /chat 请求】
+
+客户端
+  │
+  ▼
+api/main.py
+  │
+  ├─ 接收 POST /chat
+  │
+  ├─ schemas/api.py
+  │    └─ ChatRequest 校验请求字段
+  │
+  ├─ 获取 app.state.agent
+  │
+  ▼
+agents/customer_service_agent.py
+  │
+  ├─ CustomerServiceAgent.respond()
+  ├─ 清理用户消息
+  ├─ 检查消息是否为空
+  └─ 添加 system_prompt
+  │
+  ▼
+core/llm_utils.py
+  │
+  ├─ LLMClient.chat()
+  ├─ 读取 model、base_url、api_key
+  ├─ 组装 system message + user message
+  └─ 发送 HTTP 请求
+  │
+  ▼
+外部模型服务
+  │
+  └─ 返回模型文本
+  │
+  ▼
+core/llm_utils.py
+  └─ 提取并返回回复文本
+  │
+  ▼
+agents/customer_service_agent.py
+  └─ 返回客服回复
+  │
+  ▼
+api/main.py
+  │
+  └─ 创建 ChatResponse
+       │
+       ▼
+schemas/api.py
+  └─ 校验响应格式
+       │
+       ▼
+客户端收到 JSON 回复
 ```
 
 本步还没有历史消息，所以每次请求都是一次独立的单轮对话。
+当前第四步不会经过：harness/ memory/ context_builder/ skills/ knowledge_base/ 多 Agent Router
 
 ## 重要文件和代码结构
 

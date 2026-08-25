@@ -19,7 +19,11 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
 COPY api ./api
+COPY agents ./agents
 COPY core ./core
+COPY harness ./harness
+COPY memory ./memory
+COPY schemas ./schemas
 
 EXPOSE 8000
 
