@@ -22,8 +22,10 @@ COPY api ./api
 COPY agents ./agents
 COPY core ./core
 COPY harness ./harness
+COPY knowledge ./knowledge
 COPY memory ./memory
 COPY schemas ./schemas
+COPY data ./data
 
 EXPOSE 8000
 

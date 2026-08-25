@@ -11,3 +11,6 @@ httpx==0.28.1
 
 # Short-term conversation and AgentState persistence
 redis==5.2.1
+
+# Semantic knowledge retrieval
+chromadb==0.5.23

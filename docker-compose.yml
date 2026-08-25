@@ -1,6 +1,5 @@
-# Local infrastructure for the first Arclume project stage.
-# Redis and ChromaDB are declared now so later memory and retrieval modules can
-# use stable service names without changing the development topology.
+# Local infrastructure for the Arclume application.
+# Redis stores active conversation data; ChromaDB stores searchable knowledge.
 
 services:
   api:

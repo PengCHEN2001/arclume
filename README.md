@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The sixth stage adds explicit Context construction between persistence and the
-single-Agent customer-service flow:
+The seventh stage adds ChromaDB-backed knowledge retrieval to the single-Agent
+customer-service flow:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -17,15 +17,17 @@ single-Agent customer-service flow:
 - `agents/customer_service_agent.py` provides the first single-Agent behavior
   and sends a stable system prompt through `LLMClient`.
 - `core/context_builder.py` assembles the temporary model context from the
-  current message, conversation history, and AgentState.
+  current message, conversation history, AgentState, and retrieved evidence.
 - `memory/` stores recent conversation messages and active-case `AgentState`
   records in Redis.
-- Docker Compose provides Redis for current memory and reserves ChromaDB for
-  future retrieval and long-term memory.
+- `knowledge/knowledge_base.py` indexes document chunks in ChromaDB and returns
+  semantic search results for one request.
+- `data/demo_docs/` contains small English policy documents for local RAG tests.
+- The `/chat` endpoint retrieves up to three relevant knowledge chunks before
+  building a temporary Context. Retrieval failure does not stop chat.
+- `/knowledge/search` and `/knowledge/stats` provide model-free retrieval checks.
 - No business Tool, Agent routing, context compression, skills, or
   self-improvement loop is implemented yet.
-- The `/chat` endpoint now loads memory and AgentState, builds a temporary
-  Context, and saves the result around one model request.
 
 ## Python environment
 
@@ -60,6 +62,8 @@ Useful endpoints:
 
 - `GET /health` — process and configuration status.
 - `POST /chat` — single-Agent customer-service request with Redis persistence.
+- `GET /knowledge/search` — semantic search without calling the model.
+- `GET /knowledge/stats` — indexed knowledge chunk count.
 - `GET /docs` — interactive API documentation.
 
 The service can start without a model key so the HTTP layer can be inspected.
@@ -75,4 +79,5 @@ docker compose logs -f api
 ```
 
 The current application uses Redis for short-term memory and AgentState. ChromaDB
-remains reserved for the later retrieval and long-term memory stages.
+stores the current knowledge collection. The application can start while ChromaDB
+is unavailable; RAG is skipped until the service becomes available.
