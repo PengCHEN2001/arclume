@@ -22,12 +22,16 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from agents.customer_service_agent import CustomerServiceAgent
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
+from core.skill_loader import SkillLoader
+from harness.executor import ToolExecutor
+from harness.runtime import HarnessRuntime
 from knowledge import KnowledgeBaseError
 from knowledge.knowledge_base import KnowledgeBase
 from memory import MemoryStoreError
 from memory.conversation_memory import ConversationMemory
 from memory.state_store import StateStore
 from schemas.api import ChatRequest, ChatResponse
+from tools.tool_functions import register_tools
 
 
 load_dotenv()
@@ -57,11 +61,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app.state.knowledge_base.initialize_async()
     except KnowledgeBaseError as exc:
         logger.warning("Knowledge base is not ready; chat will continue without RAG: %s", exc)
+    app.state.skill_loader = SkillLoader.from_environment()
+    app.state.tool_executor = register_tools(ToolExecutor())
+    app.state.harness = HarnessRuntime(executor=app.state.tool_executor)
     app.state.agent = CustomerServiceAgent(
         llm=app.state.llm,
         memory=app.state.memory,
         state_store=app.state.state_store,
         knowledge_base=app.state.knowledge_base,
+        skill_loader=app.state.skill_loader,
+        harness=app.state.harness,
     )
     logger.info("Arclume API started; LLM configured=%s", app.state.llm.is_configured)
     yield
@@ -100,6 +109,8 @@ async def health(request: Request) -> dict[str, object]:
             "ready": request.app.state.knowledge_base.mode is not None,
             "mode": request.app.state.knowledge_base.mode,
         },
+        "skills": request.app.state.skill_loader.list_available(),
+        "tools": [tool.name for tool in request.app.state.tool_executor.list_tools()],
     }
 
 

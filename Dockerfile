@@ -26,6 +26,8 @@ COPY knowledge ./knowledge
 COPY memory ./memory
 COPY schemas ./schemas
 COPY data ./data
+COPY skills ./skills
+COPY tools ./tools
 
 EXPOSE 8000
 

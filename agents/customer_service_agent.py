@@ -1,16 +1,21 @@
 """The first single-Agent customer-service implementation."""
 
 from datetime import datetime, timezone
+import asyncio
 import logging
+from uuid import uuid4
 
 from core.context_builder import ContextBuilder
 from core.llm_utils import LLMClient
+from core.skill_loader import SkillError, SkillLoader
+from harness.runtime import HarnessRuntime
 from knowledge import KnowledgeBaseError
 from knowledge.knowledge_base import KnowledgeBase
 from memory.conversation_memory import ConversationMemory
 from memory.state_store import StateStore
 from schemas.context import ContextMessage
 from schemas.state import AgentState, AgentStatus
+from schemas.tool import ToolCall
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +45,9 @@ class CustomerServiceAgent:
         context_builder: ContextBuilder | None = None,
         knowledge_base: KnowledgeBase | None = None,
         knowledge_top_k: int = 3,
+        skill_loader: SkillLoader | None = None,
+        default_skill_names: list[str] | None = None,
+        harness: HarnessRuntime | None = None,
     ) -> None:
         self.llm = llm                         # Shared model transport
         self.system_prompt = system_prompt     # Stable instructions for this Agent
@@ -47,6 +55,9 @@ class CustomerServiceAgent:
         self.state_store = state_store         # Persisted active-case state
         self.knowledge_base = knowledge_base     # Optional semantic knowledge retrieval
         self.knowledge_top_k = knowledge_top_k   # Number of chunks added to Context
+        self.skill_loader = skill_loader         # Read-only static Skill loader
+        self.default_skill_names = list(default_skill_names or [])  # Optional manual Skills
+        self.harness = harness                     # Tool policy and execution boundary
         self.context_builder = context_builder or ContextBuilder([system_prompt])
 
     async def respond(
@@ -55,14 +66,16 @@ class CustomerServiceAgent:
         *,
         user_id: str = "anonymous",
         conversation_id: str | None = None,
+        skill_names: list[str] | None = None,
     ) -> str:
         """Process one turn, including Context construction and persistence.
 
         The flow is: validate the message, load recent history and AgentState,
         save the user message, retrieve relevant knowledge, build Context, call
         the model, save the reply, and persist the updated active-case state.
-        Intent gating, query rewriting, reranking, Skills, routing, and Tool
-        calls are still outside this step.
+        Intent gating, query rewriting, reranking, automatic Skill selection,
+        routing, and model-generated business Tool calls are still outside this
+        step.
         """
 
         cleaned_message = message.strip()  # Remove accidental surrounding whitespace
@@ -97,19 +110,59 @@ class CustomerServiceAgent:
         knowledge_results = []
         if self.knowledge_base:
             try:
-                knowledge_results = await self.knowledge_base.search_async(
-                    cleaned_message,
-                    top_k=self.knowledge_top_k,
-                )
+                if self.harness:
+                    # Even low-risk retrieval uses the same Tool boundary in the API flow.
+                    tool_result = await self.harness.handle_tool_call(
+                        ToolCall(
+                            call_id=str(uuid4()),
+                            tool_name="knowledge_search",
+                            arguments={
+                                "query": cleaned_message,
+                                "top_k": self.knowledge_top_k,
+                            },
+                            requested_by=self.name,
+                        ),
+                        state=state,
+                        context={"knowledge_base": self.knowledge_base},
+                    )
+                    if tool_result.success and isinstance(tool_result.data, list):
+                        knowledge_results = tool_result.data
+                    elif tool_result.error:
+                        logger.warning("Knowledge retrieval skipped: %s", tool_result.error)
+                else:
+                    # Keep direct use available for small unit tests without a Harness.
+                    knowledge_results = await self.knowledge_base.search_async(
+                        cleaned_message,
+                        top_k=self.knowledge_top_k,
+                    )
             except KnowledgeBaseError as exc:
                 # Retrieval is helpful evidence, but it must not take down chat.
                 logger.warning("Knowledge retrieval skipped: %s", exc)
+
+        selected_skill_names = (
+            list(skill_names) if skill_names is not None else self.default_skill_names
+        )
+        skill_instructions: list[str] = []
+        if selected_skill_names and self.skill_loader:
+            try:
+                skill_documents = await asyncio.to_thread(
+                    self.skill_loader.load_many,
+                    selected_skill_names,
+                )
+                skill_instructions = [
+                    f"[Skill: {document.name}]\n{document.content}"
+                    for document in skill_documents
+                ]
+            except SkillError as exc:
+                # A missing optional Skill should not break the base assistant.
+                logger.warning("Skill loading skipped: %s", exc)
 
         context = self.context_builder.build(
             cleaned_message,
             conversation_history=history,
             state=state,
             knowledge_results=knowledge_results,
+            skill_instructions=skill_instructions,
         )
         history_payload = self.context_builder.render_history(context)
         llm_kwargs = {

@@ -5,8 +5,7 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The seventh stage adds ChromaDB-backed knowledge retrieval to the single-Agent
-customer-service flow:
+The ninth stage adds a small set of internal Tools governed by the Harness:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -23,10 +22,20 @@ customer-service flow:
 - `knowledge/knowledge_base.py` indexes document chunks in ChromaDB and returns
   semantic search results for one request.
 - `data/demo_docs/` contains small English policy documents for local RAG tests.
+- `core/skill_loader.py` loads human-authored Markdown Skill instructions without
+  allowing the Agent to modify them.
+- `skills/` contains refund, logistics, and human-escalation instructions.
+- `tools/tool_functions.py` contains the current Tool functions and registers
+  them in the shared Harness Executor.
 - The `/chat` endpoint retrieves up to three relevant knowledge chunks before
-  building a temporary Context. Retrieval failure does not stop chat.
+  building a temporary Context. The knowledge lookup now passes through the
+  low-risk Harness Tool boundary, and retrieval failure does not stop chat.
+- The Agent accepts explicitly selected Skill names, but automatic Skill
+  selection waits for the later intent and routing stage.
 - `/knowledge/search` and `/knowledge/stats` provide model-free retrieval checks.
-- No business Tool, Agent routing, context compression, skills, or
+- Order and logistics Tools currently return deterministic mock data. Ticket
+  creation is marked high risk and stops for approval.
+- No Agent routing, context compression, Skill evolution, or
   self-improvement loop is implemented yet.
 
 ## Python environment
