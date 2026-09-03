@@ -30,6 +30,9 @@ class ToolDefinition:
     max_retries: int = 0                           # Extra attempts after failure
     allowed_agents: set[str] | None = None         # Optional Agent allowlist
     enabled: bool = True                           # Whether the Tool is available
+    cache_ttl_seconds: float = 0.0                 # Zero disables result caching
+    supports_rerank: bool = False                  # Whether the result is reranked
+    fallback: ToolHandler | None = None            # Safe fallback after a failure
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -38,6 +41,8 @@ class ToolDefinition:
             raise ValueError("Tool timeout must be greater than zero")
         if self.max_retries < 0:
             raise ValueError("Tool retries cannot be negative")
+        if self.cache_ttl_seconds < 0:
+            raise ValueError("Tool cache TTL cannot be negative")
 
 
 class ToolExecutor:

@@ -29,3 +29,6 @@ class ToolResult(BaseModel):
     error: str | None = None
     requires_approval: bool = False
     duration_ms: float | None = Field(default=None, ge=0)
+    cached: bool = False
+    fallback_used: bool = False
+    reranked: bool = False

@@ -203,6 +203,8 @@ class CustomerServiceAgent:
                     )
                     if tool_result.success and isinstance(tool_result.data, list):
                         knowledge_results = tool_result.data
+                    elif tool_result.success and isinstance(tool_result.data, dict):
+                        knowledge_results = list(tool_result.data.get("results") or [])
                     elif tool_result.error:
                         logger.warning("Knowledge retrieval skipped: %s", tool_result.error)
                 else:
@@ -340,6 +342,7 @@ class CustomerServiceAgent:
 
         return {
             "knowledge_base": self.knowledge_base,
+            "tool_manager": self.harness.executor if self.harness else None,
             "state": state,
             "agent_name": self.name,
             "intent": intent,

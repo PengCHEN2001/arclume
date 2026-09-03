@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The tenth stage adds intent recognition, structured Agent roles, and a central
-multi-Agent orchestrator:
+The eleventh stage adds governed RAG retrieval and reliable internal Tool
+execution on top of the structured multi-Agent orchestrator:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -43,23 +43,26 @@ multi-Agent orchestrator:
 - `skills/` contains refund, logistics, technical, and human-escalation instructions.
 - `tools/tool_functions.py` contains the current Tool functions and registers
   them in the shared Harness Executor.
+- `tools/tool_manager.py` coordinates query rewriting, parallel recall,
+  deduplication, reranking, TTL caching, circuit breaking, fallback, and Tool
+  statistics.
 - `core/llm_utils.py` can parse OpenAI-compatible function calls, while the
   Harness remains responsible for Tool authorization and execution.
 - The `/chat` endpoint now runs intent recognition and orchestration before the
   selected Agent builds Context. RAG is skipped for greetings, feedback, and
   explicit human handoff requests, and is enabled for business intents.
 - The selected Agent receives only the Skill relevant to the detected domain.
-- The current basic knowledge retrieval still passes through the low-risk
-  Harness Tool boundary; enhanced query rewriting, multi-recall, deduplication,
-  and reranking remain a later retrieval upgrade.
-- `/knowledge/search` and `/knowledge/stats` provide model-free retrieval checks.
+- The knowledge retrieval path now passes through the low-risk Harness Tool
+  boundary and supports bounded query variants, parallel recall, deduplication,
+  and local or optional model reranking.
+- `/knowledge/search`, `/knowledge/stats`, and `/tools/stats` provide model-free
+  retrieval and reliability checks.
 - Order and logistics Tools currently return deterministic mock data. Ticket
   creation is marked high risk and stops for approval.
-- The current Tool loop is bounded and only runs when the configured provider
+- The current Agent Tool loop is bounded and only runs when the configured provider
   supports compatible function calling; otherwise the text path remains active.
-- Advanced retrieval, Tool caching, circuit breaking, three-tier long-term
-  memory, context compression, monitoring, evaluation, and automatic Skill
-  evolution are not implemented yet.
+- Three-tier long-term memory, context compression, monitoring, evaluation, and
+  automatic Skill evolution are not implemented yet.
 
 ## Python environment
 

@@ -124,9 +124,20 @@ class HarnessRuntime:
                 "success": result.success,
                 "error": result.error,
                 "duration_ms": result.duration_ms,
+                "cached": result.cached,
+                "fallback_used": result.fallback_used,
+                "reranked": result.reranked,
             },
         )
         return result
+
+    def tool_stats(self) -> dict[str, dict[str, float | int | str]]:
+        """Return Tool metrics when the configured executor provides them."""
+
+        provider = getattr(self.executor, "stats_snapshot", None)
+        if not callable(provider):
+            return {}
+        return provider()
 
     def tool_schemas(
         self,

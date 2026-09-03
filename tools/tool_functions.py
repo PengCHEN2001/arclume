@@ -15,13 +15,43 @@ async def knowledge_search(
 ) -> list[dict[str, Any]]:
     """Search the existing KnowledgeBase without duplicating retrieval logic."""
 
-    knowledge_base = (context or {}).get("knowledge_base")  # Injected service dependency
+    data = context or {}
+    tool_manager = data.get("tool_manager")
+    if tool_manager is not None and hasattr(tool_manager, "search_with_rewrite"):
+        return await tool_manager.search_with_rewrite(
+            arguments["query"],
+            top_k=arguments.get("top_k", 3),
+        )
+
+    knowledge_base = data.get("knowledge_base")  # Injected service dependency
     if knowledge_base is None:
         raise RuntimeError("KnowledgeBase is not available")
-    return await knowledge_base.search_async(
-        arguments["query"],
-        top_k=arguments.get("top_k", 3),
-    )
+    results = await knowledge_base.search_async(arguments["query"], top_k=arguments.get("top_k", 3))
+    return {
+        "query": arguments["query"],
+        "queries": [arguments["query"]],
+        "results": results,
+        "reranked": False,
+        "rerank_method": "none",
+        "degraded": False,
+    }
+
+
+def knowledge_search_fallback(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return an explicit empty retrieval result when the knowledge service fails."""
+
+    return {
+        "query": str(arguments.get("query", "")),
+        "queries": [],
+        "results": [],
+        "reranked": False,
+        "rerank_method": "none",
+        "degraded": True,
+        "message": "Knowledge retrieval is temporarily unavailable.",
+    }
 
 
 def suggest_required_fields(
@@ -218,6 +248,10 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=10.0,
+            max_retries=1,
+            cache_ttl_seconds=300.0,
+            supports_rerank=True,
+            fallback=knowledge_search_fallback,
             allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )
@@ -337,6 +371,7 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=5.0,
+            cache_ttl_seconds=30.0,
             allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )
@@ -352,6 +387,7 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=5.0,
+            cache_ttl_seconds=30.0,
             allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )

@@ -15,7 +15,6 @@ from agents.technical_agent import TechnicalAgent
 from core.intent_recognizer import IntentRecognizer
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
 from core.skill_loader import SkillLoader
-from harness.executor import ToolExecutor
 from harness.runtime import HarnessRuntime
 from knowledge import KnowledgeBaseError
 from knowledge.knowledge_base import KnowledgeBase
@@ -23,6 +22,8 @@ from memory import MemoryStoreError
 from memory.conversation_memory import ConversationMemory
 from memory.state_store import StateStore
 from schemas.api import ChatRequest, ChatResponse
+from schemas.tool import ToolCall
+from tools.tool_manager import ToolManager
 from tools.tool_functions import register_tools
 
 
@@ -54,7 +55,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except KnowledgeBaseError as exc:
         logger.warning("Knowledge base is not ready; chat will continue without RAG: %s", exc)
     app.state.skill_loader = SkillLoader.from_environment()
-    app.state.tool_executor = register_tools(ToolExecutor())
+    app.state.tool_manager = register_tools(
+        ToolManager(
+            llm=app.state.llm,
+            knowledge_base=app.state.knowledge_base,
+        )
+    )
+    app.state.tool_executor = app.state.tool_manager
     app.state.harness = HarnessRuntime(executor=app.state.tool_executor)
     common_agent_kwargs = {
         "llm": app.state.llm,
@@ -121,6 +128,8 @@ async def health(request: Request) -> dict[str, object]:
         },
         "skills": request.app.state.skill_loader.list_available(),
         "tools": [tool.name for tool in request.app.state.tool_executor.list_tools()],
+        "tool_stats": request.app.state.harness.tool_stats(),
+        "rag_llm_enabled": request.app.state.tool_manager.rag_llm_enabled,
         "agents": [
             agent_type.value
             for agent_type in request.app.state.orchestrator.list_agents()
@@ -183,14 +192,39 @@ async def knowledge_search(
 ) -> dict[str, object]:
     """Search indexed knowledge without calling the model."""
 
-    knowledge_base: KnowledgeBase = request.app.state.knowledge_base
+    harness: HarnessRuntime = request.app.state.harness
     try:
-        results = await knowledge_base.search_async(query, top_k=top_k)
+        result = await harness.handle_tool_call(
+            ToolCall(
+                call_id=str(uuid4()),
+                tool_name="knowledge_search",
+                arguments={"query": query, "top_k": top_k},
+                requested_by="general",
+            ),
+            context={
+                "knowledge_base": request.app.state.knowledge_base,
+                "tool_manager": request.app.state.tool_manager,
+                "request_id": str(uuid4()),
+            },
+            allowed_tools={"knowledge_search"},
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except KnowledgeBaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"query": query, "results": results}
+    if not result.success and not result.fallback_used:
+        raise HTTPException(status_code=503, detail=result.error or "Knowledge retrieval failed")
+    data = result.data if isinstance(result.data, dict) else {"results": result.data or []}
+    return {
+        "query": query,
+        "queries": data.get("queries", [query]),
+        "results": data.get("results", []),
+        "reranked": result.reranked or bool(data.get("reranked")),
+        "rerank_method": data.get("rerank_method", "none"),
+        "cached": result.cached,
+        "fallback_used": result.fallback_used,
+        "degraded": bool(data.get("degraded")) or result.fallback_used,
+    }
 
 
 @app.get("/knowledge/stats")
@@ -203,3 +237,10 @@ async def knowledge_stats(request: Request) -> dict[str, object]:
     except KnowledgeBaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"collection": KnowledgeBase.COLLECTION_NAME, "total_chunks": count}
+
+
+@app.get("/tools/stats")
+async def tool_stats(request: Request) -> dict[str, object]:
+    """Return internal Tool reliability metrics for local verification."""
+
+    return {"tools": request.app.state.harness.tool_stats()}
