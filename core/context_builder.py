@@ -84,6 +84,21 @@ class ContextBuilder:
                 }
             )
 
+        if context.metadata:
+            request_analysis = {
+                key: value
+                for key, value in context.metadata.items()
+                if value is not None and value != "" and value != [] and value != {}
+            }
+            if request_analysis:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "[Request analysis]\n"
+                        + ContextBuilder._json_text(request_analysis),
+                    }
+                )
+
         if context.skill_instructions:
             messages.append(
                 {

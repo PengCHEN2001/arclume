@@ -5,7 +5,7 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The ninth stage adds a small set of internal Tools governed by the Harness:
+The tenth stage adds intent recognition and a central multi-Agent orchestrator:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -13,8 +13,17 @@ The ninth stage adds a small set of internal Tools governed by the Harness:
 - `schemas/` defines shared API, state, context, and tool models.
 - `harness/` separates policy decisions, Tool execution, tracing, and the
   model-independent Agent loop skeleton.
-- `agents/customer_service_agent.py` provides the first single-Agent behavior
-  and sends a stable system prompt through `LLMClient`.
+- `agents/customer_service_agent.py` provides shared execution logic for domain
+  Agents and sends a stable system prompt through `LLMClient`.
+- `agents/general_agent.py`, `agents/technical_agent.py`, and
+  `agents/billing_agent.py` provide the three executable domain Agents.
+- `core/intent_recognizer.py` produces fine-grained intent, entities, urgency,
+  confidence, domain scores, and the RAG decision. Local recognition is the
+  default; an optional refinement LLM call is controlled by
+  `ARCLUME_INTENT_LLM_ENABLED`.
+- `agents/agent_orchestrator.py` selects the primary Agent, can run a technical
+  and billing Agent in parallel for compound requests, handles clarification,
+  records basic Agent performance, and falls back to the General Agent.
 - `core/context_builder.py` assembles the temporary model context from the
   current message, conversation history, AgentState, and retrieved evidence.
 - `memory/` stores recent conversation messages and active-case `AgentState`
@@ -27,16 +36,18 @@ The ninth stage adds a small set of internal Tools governed by the Harness:
 - `skills/` contains refund, logistics, and human-escalation instructions.
 - `tools/tool_functions.py` contains the current Tool functions and registers
   them in the shared Harness Executor.
-- The `/chat` endpoint retrieves up to three relevant knowledge chunks before
-  building a temporary Context. The knowledge lookup now passes through the
-  low-risk Harness Tool boundary, and retrieval failure does not stop chat.
-- The Agent accepts explicitly selected Skill names, but automatic Skill
-  selection waits for the later intent and routing stage.
+- The `/chat` endpoint now runs intent recognition and orchestration before the
+  selected Agent builds Context. RAG is skipped for greetings, feedback, and
+  explicit human handoff requests, and is enabled for business intents.
+- The selected Agent receives only the Skill relevant to the detected domain.
+- The current basic knowledge retrieval still passes through the low-risk
+  Harness Tool boundary; enhanced query rewriting, multi-recall, deduplication,
+  and reranking remain a later retrieval upgrade.
 - `/knowledge/search` and `/knowledge/stats` provide model-free retrieval checks.
 - Order and logistics Tools currently return deterministic mock data. Ticket
   creation is marked high risk and stops for approval.
-- No Agent routing, context compression, Skill evolution, or
-  self-improvement loop is implemented yet.
+- Advanced retrieval, three-tier long-term memory, context compression,
+  monitoring, evaluation, and Skill evolution are not implemented yet.
 
 ## Python environment
 

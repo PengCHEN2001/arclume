@@ -1,4 +1,4 @@
-"""The first single-Agent customer-service implementation."""
+"""Shared execution logic for Arclume's domain customer-service Agents."""
 
 from datetime import datetime, timezone
 import asyncio
@@ -35,11 +35,12 @@ class CustomerServiceAgent:
     """Handle one customer message with one provider-agnostic LLM client."""
 
     name = "customer_service"
+    system_prompt = DEFAULT_SYSTEM_PROMPT
 
     def __init__(
         self,
         llm: LLMClient,
-        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        system_prompt: str | None = None,
         memory: ConversationMemory | None = None,
         state_store: StateStore | None = None,
         context_builder: ContextBuilder | None = None,
@@ -50,7 +51,9 @@ class CustomerServiceAgent:
         harness: HarnessRuntime | None = None,
     ) -> None:
         self.llm = llm                         # Shared model transport
-        self.system_prompt = system_prompt     # Stable instructions for this Agent
+        self.system_prompt = system_prompt or getattr(
+            self, "system_prompt", DEFAULT_SYSTEM_PROMPT
+        )                                       # Stable instructions for this Agent
         self.memory = memory                   # Short-term conversation history
         self.state_store = state_store         # Persisted active-case state
         self.knowledge_base = knowledge_base     # Optional semantic knowledge retrieval
@@ -58,7 +61,7 @@ class CustomerServiceAgent:
         self.skill_loader = skill_loader         # Read-only static Skill loader
         self.default_skill_names = list(default_skill_names or [])  # Optional manual Skills
         self.harness = harness                     # Tool policy and execution boundary
-        self.context_builder = context_builder or ContextBuilder([system_prompt])
+        self.context_builder = context_builder or ContextBuilder([self.system_prompt])
 
     async def respond(
         self,
@@ -67,15 +70,24 @@ class CustomerServiceAgent:
         user_id: str = "anonymous",
         conversation_id: str | None = None,
         skill_names: list[str] | None = None,
+        knowledge_enabled: bool = True,
+        intent: str | None = None,
+        intent_group: str | None = None,
+        intent_confidence: float = 0.0,
+        urgency: str | None = None,
+        entities: dict[str, object] | None = None,
+        supporting_agents: list[str] | None = None,
+        routing_reason: str | None = None,
+        persist: bool = True,
     ) -> str:
         """Process one turn, including Context construction and persistence.
 
         The flow is: validate the message, load recent history and AgentState,
         save the user message, retrieve relevant knowledge, build Context, call
         the model, save the reply, and persist the updated active-case state.
-        Intent gating, query rewriting, reranking, automatic Skill selection,
-        routing, and model-generated business Tool calls are still outside this
-        step.
+        The Orchestrator supplies intent and routing metadata. ``persist=False``
+        is used for supporting Agents so parallel collaboration does not write
+        duplicate messages into the shared conversation history.
         """
 
         cleaned_message = message.strip()  # Remove accidental surrounding whitespace
@@ -90,11 +102,12 @@ class CustomerServiceAgent:
 
         if conversation_id and self.memory:
             history = await self.memory.get_messages(user_id, conversation_id)
-            await self.memory.add_message(
-                user_id,
-                conversation_id,
-                ContextMessage(role="user", content=cleaned_message),
-            )
+            if persist:
+                await self.memory.add_message(
+                    user_id,
+                    conversation_id,
+                    ContextMessage(role="user", content=cleaned_message),
+                )
 
         if conversation_id and self.state_store:
             state = await self.state_store.get_or_create(user_id, conversation_id)
@@ -102,13 +115,22 @@ class CustomerServiceAgent:
                 update={
                     "status": AgentStatus.ACTIVE,
                     "active_agent": self.name,
+                    "intent": intent,
+                    "intent_group": intent_group,
+                    "intent_confidence": intent_confidence,
+                    "urgency": urgency,
+                    "entities": dict(entities or {}),
+                    "supporting_agents": list(supporting_agents or []),
+                    "routing_reason": routing_reason,
+                    "needs_rag": knowledge_enabled,
                     "updated_at": datetime.now(timezone.utc),
                 }
             )
-            await self.state_store.save(state)
+            if persist:
+                await self.state_store.save(state)
 
         knowledge_results = []
-        if self.knowledge_base:
+        if self.knowledge_base and knowledge_enabled:
             try:
                 if self.harness:
                     # Even low-risk retrieval uses the same Tool boundary in the API flow.
@@ -163,6 +185,17 @@ class CustomerServiceAgent:
             state=state,
             knowledge_results=knowledge_results,
             skill_instructions=skill_instructions,
+            metadata={
+                "intent": intent,
+                "intent_group": intent_group,
+                "intent_confidence": intent_confidence,
+                "urgency": urgency,
+                "entities": dict(entities or {}),
+                "active_agent": self.name,
+                "supporting_agents": list(supporting_agents or []),
+                "routing_reason": routing_reason,
+                "rag_enabled": knowledge_enabled,
+            },
         )
         history_payload = self.context_builder.render_history(context)
         llm_kwargs = {
@@ -173,17 +206,23 @@ class CustomerServiceAgent:
 
         answer = await self.llm.chat(context.user_message, **llm_kwargs)
 
-        if conversation_id and self.memory:
+        if persist and conversation_id and self.memory:
             await self.memory.add_message(
                 user_id,
                 conversation_id,
                 ContextMessage(role="assistant", content=answer),
             )
 
-        if conversation_id and self.state_store and state:
+        if persist and conversation_id and self.state_store and state:
+            needs_human = (
+                urgency in {"high", "critical"}
+                or intent in {"escalation", "human_handoff"}
+            )
             state = state.model_copy(
                 update={
                     "version": state.version + 1,
+                    "status": AgentStatus.ESCALATED if needs_human else AgentStatus.ACTIVE,
+                    "needs_human": needs_human,
                     "updated_at": datetime.now(timezone.utc),
                 }
             )

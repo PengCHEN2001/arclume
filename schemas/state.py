@@ -1,9 +1,4 @@
-"""Structured state for one active customer-support case.
-
-AgentState is a data contract only at this stage. It is not persisted yet and
-does not implement state transitions. A later state store will serialize this
-model and restore it when a conversation continues.
-"""
+"""Structured state for one active customer-support case."""
 
 from datetime import datetime, timezone
 from enum import Enum
@@ -24,14 +19,20 @@ class AgentStatus(str, Enum):
 
 
 class AgentState(BaseModel):
-    """Serializable structured state shared by future Agent components."""
+    """Serializable state shared by routing, Agents, Memory, and Context."""
 
     user_id: str = Field(default="anonymous", min_length=1)
     conversation_id: str = Field(min_length=1)
     status: AgentStatus = AgentStatus.NEW
     intent: str | None = None
+    intent_group: str | None = None
+    intent_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    urgency: str | None = None
     entities: dict[str, Any] = Field(default_factory=dict)
     active_agent: str | None = None
+    supporting_agents: list[str] = Field(default_factory=list)
+    routing_reason: str | None = None
+    needs_rag: bool = False
     needs_human: bool = False
     pending_approval: bool = False
     version: int = Field(default=1, ge=1)

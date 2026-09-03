@@ -6,6 +6,9 @@ from harness.executor import ToolDefinition, ToolExecutor
 from harness.policy import ToolRiskLevel
 
 
+ALLOWED_AGENT_NAMES = {"customer_service", "general", "technical", "billing"}
+
+
 async def knowledge_search(
     arguments: dict[str, Any],
     context: dict[str, Any] | None,
@@ -84,7 +87,7 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=10.0,
-            allowed_agents={"customer_service"},
+            allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )
     executor.register(
@@ -99,7 +102,7 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=5.0,
-            allowed_agents={"customer_service"},
+            allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )
     executor.register(
@@ -114,7 +117,7 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=5.0,
-            allowed_agents={"customer_service"},
+            allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )
     executor.register(
@@ -132,7 +135,7 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             },
             risk_level=ToolRiskLevel.HIGH,
             timeout_seconds=5.0,
-            allowed_agents={"customer_service"},
+            allowed_agents=set(ALLOWED_AGENT_NAMES),
         )
     )
     return executor

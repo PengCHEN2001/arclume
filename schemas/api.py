@@ -29,3 +29,10 @@ class ChatResponse(BaseModel):
     message: str
     model: str
     conversation_id: str | None = None
+    intent: str | None = None
+    intent_group: str | None = None
+    primary_agent: str | None = None
+    supporting_agents: list[str] = Field(default_factory=list)
+    routing_reason: str | None = None
+    routing_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    escalated: bool = False

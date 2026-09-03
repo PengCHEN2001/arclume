@@ -1,16 +1,4 @@
-"""Arclume's HTTP entry point for the single-Agent memory flow.
-
-This module intentionally implements only the smallest useful vertical slice:
-
-1. Create a FastAPI application.
-2. Load configuration from environment variables.
-3. Expose a health endpoint for local and container checks.
-4. Expose a chat endpoint backed by CustomerServiceAgent.
-
-The API owns application resources while the Agent owns customer-service
-behavior. Redis-backed conversation memory and AgentState persistence are now
-created at application startup.
-"""
+"""Arclume's HTTP entry point for the multi-Agent customer-service flow."""
 
 from contextlib import asynccontextmanager
 import logging
@@ -20,7 +8,11 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from agents.customer_service_agent import CustomerServiceAgent
+from agents.agent_orchestrator import AgentOrchestrator
+from agents.billing_agent import BillingAgent
+from agents.general_agent import GeneralAgent
+from agents.technical_agent import TechnicalAgent
+from core.intent_recognizer import IntentRecognizer
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
 from core.skill_loader import SkillLoader
 from harness.executor import ToolExecutor
@@ -64,14 +56,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.skill_loader = SkillLoader.from_environment()
     app.state.tool_executor = register_tools(ToolExecutor())
     app.state.harness = HarnessRuntime(executor=app.state.tool_executor)
-    app.state.agent = CustomerServiceAgent(
+    common_agent_kwargs = {
+        "llm": app.state.llm,
+        "memory": app.state.memory,
+        "state_store": app.state.state_store,
+        "knowledge_base": app.state.knowledge_base,
+        "skill_loader": app.state.skill_loader,
+        "harness": app.state.harness,
+    }
+    app.state.general_agent = GeneralAgent(**common_agent_kwargs)
+    app.state.technical_agent = TechnicalAgent(**common_agent_kwargs)
+    app.state.billing_agent = BillingAgent(**common_agent_kwargs)
+    intent_llm_enabled = os.getenv(
+        "ARCLUME_INTENT_LLM_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes"}
+    app.state.intent_recognizer = IntentRecognizer(
         llm=app.state.llm,
-        memory=app.state.memory,
-        state_store=app.state.state_store,
-        knowledge_base=app.state.knowledge_base,
-        skill_loader=app.state.skill_loader,
-        harness=app.state.harness,
+        use_llm=intent_llm_enabled,
     )
+    app.state.orchestrator = AgentOrchestrator(
+        general_agent=app.state.general_agent,
+        technical_agent=app.state.technical_agent,
+        billing_agent=app.state.billing_agent,
+        intent_recognizer=app.state.intent_recognizer,
+    )
+    # Keep the general Agent available for simple integrations during migration.
+    app.state.agent = app.state.general_agent
     logger.info("Arclume API started; LLM configured=%s", app.state.llm.is_configured)
     yield
     await app.state.memory.close()
@@ -111,25 +121,33 @@ async def health(request: Request) -> dict[str, object]:
         },
         "skills": request.app.state.skill_loader.list_available(),
         "tools": [tool.name for tool in request.app.state.tool_executor.list_tools()],
+        "agents": [
+            agent_type.value
+            for agent_type in request.app.state.orchestrator.list_agents()
+        ],
+        "intent_llm_enabled": request.app.state.intent_recognizer.use_llm,
+        "agent_stats": request.app.state.orchestrator.get_stats(),
     }
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-    """Send one message through the Agent with Redis-backed persistence.
-
-    The Agent loads recent history and the current AgentState before the model
-    call, then saves the new message pair and updated state afterward.
-    """
+    """Send one message through intent recognition and Agent orchestration."""
 
     llm: LLMClient = request.app.state.llm
-    agent: CustomerServiceAgent = request.app.state.agent
+    orchestrator: AgentOrchestrator = request.app.state.orchestrator
     conversation_id = payload.conversation_id or str(uuid4())
     try:
-        answer = await agent.respond(
+        stored_history = await request.app.state.memory.get_messages(
+            payload.user_id,
+            conversation_id,
+        )
+        history = [message.model_dump() for message in stored_history]
+        result = await orchestrator.run(
             payload.message,
             user_id=payload.user_id,
             conversation_id=conversation_id,
+            history=history,
         )
     except LLMConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -141,9 +159,16 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return ChatResponse(
-        message=answer,
+        message=result.response,
         model=llm.settings.model,
         conversation_id=conversation_id,
+        intent=result.intent.intent.value,
+        intent_group=result.intent.intent_group,
+        primary_agent=result.primary_agent.value,
+        supporting_agents=[agent.value for agent in result.supporting_agents],
+        routing_reason=result.routing_reason,
+        routing_confidence=result.routing_confidence,
+        escalated=result.escalated,
     )
 
 
