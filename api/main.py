@@ -162,6 +162,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         message=result.response,
         model=llm.settings.model,
         conversation_id=conversation_id,
+        request_id=result.request_id,
         intent=result.intent.intent.value,
         intent_group=result.intent.intent_group,
         primary_agent=result.primary_agent.value,
@@ -169,6 +170,8 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         routing_reason=result.routing_reason,
         routing_confidence=result.routing_confidence,
         escalated=result.escalated,
+        tools_used=result.tools_used,
+        tool_traces=result.tool_traces,
     )
 
 

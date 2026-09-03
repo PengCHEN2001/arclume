@@ -70,6 +70,7 @@ class ToolPolicy:
         call: ToolCall,
         tool: PolicyTool | None,
         state: AgentState | None = None,
+        allowed_tools: set[str] | None = None,
     ) -> PolicyResult:
         """Check availability, Agent access, and risk without executing the Tool."""
 
@@ -85,6 +86,14 @@ class ToolPolicy:
             return PolicyResult(
                 action=PolicyAction.DENY,
                 reason=f"Tool is disabled: {call.tool_name}",
+                risk_level=tool.risk_level,
+            )
+
+        # An Agent profile may narrow the registered Tool set for one request.
+        if allowed_tools is not None and call.tool_name not in allowed_tools:
+            return PolicyResult(
+                action=PolicyAction.DENY,
+                reason=f"Tool is outside the Agent scope: {call.tool_name}",
                 risk_level=tool.risk_level,
             )
 

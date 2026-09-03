@@ -10,9 +10,12 @@ arclume/
 ├── agents/
 │   ├── __init__.py                         # Python 包声明
 │   ├── customer_service_agent.py           # 所有领域 Agent 共用的执行逻辑
+│   ├── agent_profile.py                    # Agent 角色、流程、输入输出和 Tool 范围
 │   ├── general_agent.py                    # 通用客服 Agent
 │   ├── technical_agent.py                  # 技术支持 Agent
 │   ├── billing_agent.py                    # 账单和退款 Agent
+│   ├── escalation_agent.py                  # 人工升级和交接 Agent
+│   ├── response_composer.py                 # 合并多个 Agent 的结果
 │   └── agent_orchestrator.py                # 意图后的中央编排器
 ├── core/
 │   ├── __init__.py                         # Python 包声明
@@ -43,13 +46,16 @@ arclume/
 用户消息
   → IntentRecognizer
   → AgentOrchestrator
-  → GeneralAgent / TechnicalAgent / BillingAgent
+  → AgentProfile
+  → GeneralAgent / TechnicalAgent / BillingAgent / EscalationAgent
   → Context + Skill + RAG
+  → Agent Tool Loop
   → Harness / Tool
+  → ResponseComposer
   → 最终回复
 ```
 
-本步的三个 Agent 不是三个完全独立的系统。它们共用同一套模型调用、Memory、
+本步的多个 Agent 不是多个完全独立的系统。它们共用同一套模型调用、Memory、
 AgentState、ContextBuilder、知识库和 Harness，只通过不同的系统指令、Skill
 和路由职责体现领域差异。
 
@@ -138,7 +144,7 @@ ARCLUME_INTENT_LLM_ENABLED=true
 检索链路；查询改写、多路召回、去重和模型重排属于后续的 RAG 增强阶段，本步
 先把“什么时候检索”接入正确的位置。
 
-## 三个领域 Agent
+## 三个领域 Agent 和升级节点
 
 ### `agents/customer_service_agent.py`
 
@@ -205,8 +211,88 @@ system_prompt：账单和退款规则
 退款类请求使用 Skill：refund
 ```
 
-三个领域 Agent 当前都继承 `CustomerServiceAgent`，因此不会复制三份 Memory、
-Context 或模型调用代码。
+### `agents/escalation_agent.py`
+
+职责：处理明确转人工、高风险或紧急请求。
+
+它不是普通的问答 Agent，不继续猜测业务结果，而是记录升级状态并生成安全的
+交接说明。后续接入工单系统时，可以在这个节点连接人工队列或工单 Tool。
+
+三个领域 Agent 和升级 Agent 当前都复用 `CustomerServiceAgent` 的资源接口，因
+此不会复制三份 Memory、Context 或模型调用代码。升级 Agent 的回复逻辑目前是
+确定性的，不额外消耗模型调用。
+
+## AgentProfile
+
+`agents/agent_profile.py` 为每个 Agent 保存结构化角色契约。它解决的问题是：
+Agent 的区别不能只靠不同的 system prompt，还需要明确它负责什么、怎么处理、
+能看到什么和什么时候升级。
+
+核心字段：
+
+```text
+role：角色名称
+mission：主要任务
+workflow：处理步骤
+input_contract：允许使用的输入信息
+output_contract：回复必须包含的内容
+handoff_conditions：需要转人工的条件
+tool_scope：该 Agent 允许使用的 Tool 名称
+model：可选的专属模型
+temperature：模型随机性
+max_tokens：单次回复上限
+```
+
+`AgentProfile` 会被写入模型提示词，同时用于筛选模型可见的 Tool。模型即使尝试
+调用白名单之外的 Tool，Harness 也会再次拒绝，不能只依赖模型自觉遵守。
+
+## Agent Tool Loop
+
+当当前模型接口支持 OpenAI-compatible Tool Calling 时，领域 Agent 可以执行下面
+的循环：
+
+```text
+Agent / Model 返回 Tool Call
+  → 根据 AgentProfile 过滤 Tool
+  → Harness 检查权限和风险
+  → Harness 执行 Tool
+  → ToolResult 返回模型
+  → 模型生成最终回复或继续请求 Tool
+```
+
+`core/llm_utils.py` 新增 `chat_with_tools()`，只负责解析兼容格式的模型响应；它
+不负责决定权限。真正的权限、参数检查、超时和重试仍然由 Harness 负责。
+
+本步的 Tool Loop 有最大轮数限制，防止模型无限调用 Tool。没有配置模型、模型不
+支持 Tool Calling，或测试使用 Fake LLM 时，仍然可以使用原来的普通文本调用路径。
+
+## Tool Scope
+
+当前各 Agent 的 Tool 范围如下：
+
+| Agent | 允许的 Tool |
+| --- | --- |
+| General | `knowledge_search`、`order_query`、`logistics_query`、`suggest_required_fields` |
+| Technical | `knowledge_search`、`lookup_error_code`、`build_diagnostic_plan` |
+| Billing | `knowledge_search`、`check_billing_fields`、`compare_amounts` |
+| Escalation | `create_handoff_summary` |
+
+这里的 Tool 都是内部 Python Tool。第十一步才继续完善统一 Tool Manager、缓存、
+熔断、Fallback 和增强 RAG，不在本步提前实现。
+
+## ResponseComposer
+
+`agents/response_composer.py` 负责把主 Agent 和辅助 Agent 的结果整理成一个回复：
+
+```text
+主 Agent 结果优先
+  → 删除完全重复的结果
+  → 保留不同的专业补充
+  → 输出一条最终回复
+```
+
+当前使用确定性合并，不再额外调用模型，避免复合问题产生不必要的成本。后续如
+果出现大量冲突答案，再评估是否增加专门的模型合并步骤。
 
 ## `agents/agent_orchestrator.py`
 
@@ -226,7 +312,7 @@ Context 或模型调用代码。
 
 ### 类和同层结构
 
-`AgentType`：`general`、`technical`、`billing` 三种可执行 Agent。
+`AgentType`：`general`、`technical`、`billing` 和 `escalation` 四种 Agent 节点。
 
 `AgentStats`：保存调用次数、成功次数、平均耗时和路由分数。现在是进程内统计，
 后续由 Monitor 接管并持久化。
@@ -255,7 +341,7 @@ _run_parallel()：并行执行主 Agent和辅助 Agent
 _execute()：执行一个 Agent 并更新统计
 _best_agent()：按 routing_score 选择可用实例
 _skills_for()：根据领域和意图选择 Skill
-_combine_responses()：合并复合问题的多个结果
+ResponseComposer.compose()：合并复合问题的多个结果
 get_stats()：提供给健康检查和后续 Monitor
 list_agents()：返回当前注册的 Agent
 ```
@@ -269,10 +355,10 @@ list_agents()：返回当前注册的 Agent
 | 退款、发票、支付异常 | Billing | 无 | 是 | refund |
 | 登录、崩溃、错误码 | Technical | 无 | 是 | technical |
 | 同时包含技术和账单问题 | 得分较高者 | 另一个领域 Agent | 是 | 按领域分别加载 |
-| 明确要求转人工或紧急升级 | General | 无 | 否 | escalation |
+| 明确要求转人工或紧急升级 | Escalation | 无 | 否 | escalation |
 | 无法判断的复杂问题 | General | 无 | 否 | 无，先请求澄清 |
 
-转人工不是独立的第四个 LLM Agent，而是一次路由结果和 State 状态。真正的
+Escalation 是独立的升级节点，但当前使用确定性回复，不额外调用模型。真正的
 工单创建仍然必须经过高风险 Tool 和人工审批。
 
 ## 典型请求流程
@@ -286,11 +372,12 @@ list_agents()：返回当前注册的 Agent
 4. Orchestrator 选择一个主 Agent，另一个作为辅助 Agent
 5. 两个 Agent 并行处理，主 Agent 持久化本轮对话
 6. TechnicalAgent 加载 technical Skill，BillingAgent 加载 refund Skill
-7. 两个 Agent 按相同的 RAG 开关查询知识库
-8. 各自经过 Harness 执行知识检索 Tool
-9. ContextBuilder 将 State、实体、Skill、知识和历史组合给模型
-10. Orchestrator 按主 Agent 在前的顺序合并回复
-11. API 返回回复、意图、主 Agent、辅助 Agent 和路由原因
+7. 每个 Agent 根据 AgentProfile 得到自己的 Tool Scope
+8. 模型需要时发起 Tool Call，Harness 检查并执行
+9. ToolResult 返回模型，模型继续处理或生成最终回答
+10. ContextBuilder 将 State、实体、Skill、知识和历史组合给模型
+11. ResponseComposer 按主 Agent 优先合并多个结果
+12. API 返回回复、意图、主 Agent、辅助 Agent、路由原因和 Tool 记录
 ```
 
 单一退款问题则不会并行：
@@ -300,7 +387,7 @@ list_agents()：返回当前注册的 Agent
   → IntentRecognizer(refund)
   → Orchestrator
   → BillingAgent
-  → refund Skill + RAG + Harness
+  → AgentProfile + refund Skill + RAG + Harness Tool Loop
   → Redis 保存结果
   → ChatResponse
 ```
@@ -323,9 +410,11 @@ TechnicalAgent
 BillingAgent
 IntentRecognizer
 AgentOrchestrator
+EscalationAgent（由 AgentOrchestrator 组装）
+ResponseComposer（由 AgentOrchestrator 使用）
 ```
 
-三个 Agent 共享底层资源，但每个 Agent 有自己的系统指令和名称。
+四个 Agent 节点共享底层资源，但每个 Agent 有自己的名称、Profile 和处理边界。
 
 ### `/chat` 返回字段
 
@@ -339,12 +428,15 @@ supporting_agents：辅助 Agent 列表
 routing_reason：路由原因和领域得分
 routing_confidence：路由置信度
 escalated：是否触发升级
+request_id：本次请求的唯一标识
+tools_used：本次请求成功使用的 Tool
+tool_traces：本次请求的 Tool 调用记录
 ```
 
 ### `/health` 增加内容
 
 ```text
-agents：当前三个 Agent
+agents：当前四个 Agent 节点
 intent_llm_enabled：是否开启意图模型细化
 agent_stats：各 Agent 的调用和成功统计
 ```
@@ -362,6 +454,11 @@ agent_stats：各 Agent 的调用和成功统计
 完成：按领域选择 Skill
 完成：/chat 返回路由信息
 完成：路由信息写入 AgentState 和 Context
+完成：AgentProfile 结构化角色契约
+完成：按 Profile 暴露和限制 Agent Tool
+完成：OpenAI-compatible Tool Calling 的基础循环
+完成：独立的 EscalationAgent
+完成：ResponseComposer 和请求级 Tool 结果字段
 ```
 
 ## 仍然留到后续的增强
@@ -379,6 +476,9 @@ Tool 缓存、熔断、fallback 和持久化运行统计
 完整评测、LLM Judge 和回归检测
 Skill 热加载与旁路自进化
 ```
+
+本步新增的编排升级已经完成；下一步只处理 RAG 和 Tool 治理，不重复设计
+AgentProfile、Agent Tool Loop 或升级节点。
 
 ## 本地验证
 

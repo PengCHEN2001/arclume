@@ -11,6 +11,7 @@ Those decisions belong to higher-level modules introduced in later steps.
 """
 
 from dataclasses import dataclass
+import json
 import os
 from typing import Any
 
@@ -23,6 +24,23 @@ class LLMConfigurationError(RuntimeError):
 
 class LLMRequestError(RuntimeError):
     """Raised when a configured provider rejects or cannot answer a request."""
+
+
+@dataclass(frozen=True)
+class LLMToolCall:
+    """One function call requested by an OpenAI-compatible model."""
+
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class LLMToolResponse:
+    """One model response that may contain text, Tool calls, or both."""
+
+    content: str
+    tool_calls: list[LLMToolCall]
 
 
 @dataclass(frozen=True)
@@ -113,6 +131,95 @@ class LLMClient:
             "Content-Type": "application/json",
         }
 
+        data = await self._post_completion(payload, headers)
+
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise LLMRequestError("LLM response did not contain message content") from exc
+
+        if not isinstance(content, str) or not content.strip():
+            raise LLMRequestError("LLM response contained empty message content")
+        return content.strip()
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMToolResponse:
+        """Request one model decision using OpenAI-compatible function calling."""
+
+        if not self.is_configured:
+            raise LLMConfigurationError(
+                "LLM is not configured. Set LLM_API_KEY, LLM_BASE_URL, and LLM_MODEL."
+            )
+
+        request_messages = list(messages)
+        if system_prompt:
+            request_messages.insert(0, {"role": "system", "content": system_prompt})
+
+        payload: dict[str, Any] = {
+            "model": model or self.settings.model,
+            "messages": request_messages,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
+        headers = {
+            "Authorization": f"Bearer {self.settings.api_key}",
+            "Content-Type": "application/json",
+        }
+        data = await self._post_completion(payload, headers)
+        try:
+            assistant_message = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise LLMRequestError("LLM response did not contain an assistant message") from exc
+
+        content = assistant_message.get("content") or ""
+        if not isinstance(content, str):
+            content = str(content)
+        calls: list[LLMToolCall] = []
+        for raw_call in assistant_message.get("tool_calls") or []:
+            try:
+                function = raw_call["function"]
+                raw_arguments = function.get("arguments", {})
+                arguments = (
+                    json.loads(raw_arguments)
+                    if isinstance(raw_arguments, str)
+                    else raw_arguments
+                )
+                if not isinstance(arguments, dict):
+                    raise ValueError("Tool arguments must be a JSON object")
+                calls.append(
+                    LLMToolCall(
+                        call_id=str(raw_call.get("id") or "tool_call"),
+                        name=str(function["name"]),
+                        arguments=arguments,
+                    )
+                )
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise LLMRequestError("LLM returned an invalid Tool call") from exc
+
+        if not content.strip() and not calls:
+            raise LLMRequestError("LLM response contained neither text nor a Tool call")
+        return LLMToolResponse(content=content.strip(), tool_calls=calls)
+
+    async def _post_completion(
+        self,
+        payload: dict[str, Any],
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        """Send one completion request and normalize transport-level errors."""
+
         try:
             response = await self._http.post(
                 f"{self.settings.base_url}/chat/completions",
@@ -123,12 +230,6 @@ class LLMClient:
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise LLMRequestError(f"LLM request failed: {exc}") from exc
-
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LLMRequestError("LLM response did not contain message content") from exc
-
-        if not isinstance(content, str) or not content.strip():
-            raise LLMRequestError("LLM response contained empty message content")
-        return content.strip()
+        if not isinstance(data, dict):
+            raise LLMRequestError("LLM response must be a JSON object")
+        return data

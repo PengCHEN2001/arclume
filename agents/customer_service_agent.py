@@ -2,10 +2,12 @@
 
 from datetime import datetime, timezone
 import asyncio
+import json
 import logging
 from uuid import uuid4
 
 from core.context_builder import ContextBuilder
+from agents.agent_profile import AgentProfile
 from core.llm_utils import LLMClient
 from core.skill_loader import SkillError, SkillLoader
 from harness.runtime import HarnessRuntime
@@ -31,11 +33,25 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+DEFAULT_AGENT_PROFILE = AgentProfile(
+    role="Customer support assistant",
+    mission="Resolve the current support request using verified context and safe next steps.",
+    workflow=["understand the request", "use available evidence", "answer or escalate"],
+    input_contract=["user message", "conversation history", "case state", "knowledge context"],
+    output_contract=["direct answer", "necessary missing information", "safe next step"],
+    handoff_conditions=["human judgment or an unavailable business operation is required"],
+    tool_scope=["knowledge_search"],
+    temperature=0.2,
+    max_tokens=1024,
+)
+
+
 class CustomerServiceAgent:
     """Handle one customer message with one provider-agnostic LLM client."""
 
     name = "customer_service"
     system_prompt = DEFAULT_SYSTEM_PROMPT
+    profile = DEFAULT_AGENT_PROFILE
 
     def __init__(
         self,
@@ -49,7 +65,12 @@ class CustomerServiceAgent:
         skill_loader: SkillLoader | None = None,
         default_skill_names: list[str] | None = None,
         harness: HarnessRuntime | None = None,
+        profile: AgentProfile | None = None,
+        enable_tool_loop: bool = True,
+        max_tool_iterations: int = 3,
     ) -> None:
+        if max_tool_iterations < 1:
+            raise ValueError("max_tool_iterations must be at least one")
         self.llm = llm                         # Shared model transport
         self.system_prompt = system_prompt or getattr(
             self, "system_prompt", DEFAULT_SYSTEM_PROMPT
@@ -61,6 +82,11 @@ class CustomerServiceAgent:
         self.skill_loader = skill_loader         # Read-only static Skill loader
         self.default_skill_names = list(default_skill_names or [])  # Optional manual Skills
         self.harness = harness                     # Tool policy and execution boundary
+        self.profile = profile or getattr(type(self), "profile", DEFAULT_AGENT_PROFILE)
+        self.enable_tool_loop = enable_tool_loop       # Whether model Tool use is enabled
+        self.max_tool_iterations = max_tool_iterations # Safety limit for one Agent turn
+        self._last_tools_used: list[str] = []          # Tools used in the latest turn
+        self._last_tool_traces: list[dict[str, object]] = [] # Latest Tool call details
         self.context_builder = context_builder or ContextBuilder([self.system_prompt])
 
     async def respond(
@@ -78,6 +104,7 @@ class CustomerServiceAgent:
         entities: dict[str, object] | None = None,
         supporting_agents: list[str] | None = None,
         routing_reason: str | None = None,
+        request_id: str | None = None,
         persist: bool = True,
     ) -> str:
         """Process one turn, including Context construction and persistence.
@@ -93,6 +120,9 @@ class CustomerServiceAgent:
         cleaned_message = message.strip()  # Remove accidental surrounding whitespace
         if not cleaned_message:
             raise ValueError("Agent message cannot be empty")
+
+        self._last_tools_used = []
+        self._last_tool_traces = []
 
         if (self.memory or self.state_store) and not conversation_id:
             raise ValueError("conversation_id is required when persistence is enabled")
@@ -129,8 +159,21 @@ class CustomerServiceAgent:
             if persist:
                 await self.state_store.save(state)
 
+        tool_schemas = self._tool_schemas(knowledge_enabled)
+        active_tool_scope = {
+            str(item["function"]["name"])
+            for item in tool_schemas
+            if isinstance(item.get("function"), dict)
+            and item["function"].get("name")
+        }
+        tool_loop_active = bool(
+            tool_schemas
+            and self.enable_tool_loop
+            and callable(getattr(self.llm, "chat_with_tools", None))
+        )
+
         knowledge_results = []
-        if self.knowledge_base and knowledge_enabled:
+        if self.knowledge_base and knowledge_enabled and not tool_loop_active:
             try:
                 if self.harness:
                     # Even low-risk retrieval uses the same Tool boundary in the API flow.
@@ -145,7 +188,18 @@ class CustomerServiceAgent:
                             requested_by=self.name,
                         ),
                         state=state,
-                        context={"knowledge_base": self.knowledge_base},
+                        context=self._tool_context(
+                            state=state,
+                            intent=intent,
+                            entities=entities,
+                            request_id=request_id,
+                        ),
+                        allowed_tools=active_tool_scope,
+                    )
+                    self._record_tool_result(
+                        tool_name="knowledge_search",
+                        call_id="knowledge_search",
+                        result=tool_result,
                     )
                     if tool_result.success and isinstance(tool_result.data, list):
                         knowledge_results = tool_result.data
@@ -195,16 +249,31 @@ class CustomerServiceAgent:
                 "supporting_agents": list(supporting_agents or []),
                 "routing_reason": routing_reason,
                 "rag_enabled": knowledge_enabled,
+                "request_id": request_id,
             },
         )
         history_payload = self.context_builder.render_history(context)
-        llm_kwargs = {
-            "system_prompt": self.context_builder.render_system_prompt(context)
-        }
-        if history_payload:
-            llm_kwargs["history"] = history_payload
-
-        answer = await self.llm.chat(context.user_message, **llm_kwargs)
+        system_prompt = self.context_builder.render_system_prompt(context)
+        profile_prompt = self._profile_prompt()
+        if profile_prompt:
+            system_prompt = f"{system_prompt}\n\n{profile_prompt}" if system_prompt else profile_prompt
+        if tool_loop_active:
+            answer = await self._run_tool_loop(
+                user_message=context.user_message,
+                history_payload=history_payload,
+                system_prompt=system_prompt,
+                tool_schemas=tool_schemas,
+                allowed_tools=active_tool_scope,
+                state=state,
+                intent=intent,
+                entities=entities,
+                request_id=request_id,
+            )
+        else:
+            llm_kwargs = {"system_prompt": system_prompt}
+            if history_payload:
+                llm_kwargs["history"] = history_payload
+            answer = await self.llm.chat(context.user_message, **llm_kwargs)
 
         if persist and conversation_id and self.memory:
             await self.memory.add_message(
@@ -229,3 +298,174 @@ class CustomerServiceAgent:
             await self.state_store.save(state)
 
         return answer
+
+    def _tool_schemas(self, knowledge_enabled: bool) -> list[dict[str, object]]:
+        """Build the model-visible Tool list from the Agent profile scope."""
+
+        if not self.harness:
+            return []
+        enabled_tools = set(self.profile.tool_scope)
+        if not knowledge_enabled:
+            enabled_tools.discard("knowledge_search")
+        return self.harness.tool_schemas(
+            agent_name=self.name,
+            allowed_tools=self.profile.tool_scope,
+            enabled_tools=enabled_tools,
+        )
+
+    def _profile_prompt(self) -> str:
+        """Render the AgentProfile as concise model instructions."""
+
+        return (
+            "[Agent profile]\n"
+            f"Role: {self.profile.role}\n"
+            f"Mission: {self.profile.mission}\n"
+            f"Workflow: {' -> '.join(self.profile.workflow)}\n"
+            f"Input contract: {', '.join(self.profile.input_contract)}\n"
+            f"Output contract: {', '.join(self.profile.output_contract)}\n"
+            f"Handoff conditions: {', '.join(self.profile.handoff_conditions) or 'none'}\n"
+            f"Allowed Tools: {', '.join(self.profile.tool_scope) or 'none'}\n"
+            "Do not claim that an unavailable query, refund, account change, or ticket action was completed."
+        )
+
+    def _tool_context(
+        self,
+        *,
+        state: AgentState | None,
+        intent: str | None,
+        entities: dict[str, object] | None,
+        request_id: str | None,
+    ) -> dict[str, object]:
+        """Provide safe request context to internal Tool handlers."""
+
+        return {
+            "knowledge_base": self.knowledge_base,
+            "state": state,
+            "agent_name": self.name,
+            "intent": intent,
+            "entities": dict(entities or {}),
+            "request_id": request_id,
+        }
+
+    async def _run_tool_loop(
+        self,
+        *,
+        user_message: str,
+        history_payload: list[dict[str, str]],
+        system_prompt: str | None,
+        tool_schemas: list[dict[str, object]],
+        allowed_tools: set[str],
+        state: AgentState | None,
+        intent: str | None,
+        entities: dict[str, object] | None,
+        request_id: str | None,
+    ) -> str:
+        """Let the model request scoped Tools until it returns a final answer."""
+
+        messages: list[dict[str, object]] = list(history_payload)
+        messages.append({"role": "user", "content": user_message})
+        tool_context = self._tool_context(
+            state=state,
+            intent=intent,
+            entities=entities,
+            request_id=request_id,
+        )
+
+        for _ in range(self.max_tool_iterations):
+            completion = await self.llm.chat_with_tools(
+                messages,
+                tool_schemas,
+                system_prompt=system_prompt,
+                model=self.profile.model,
+                temperature=self.profile.temperature,
+                max_tokens=self.profile.max_tokens,
+            )
+            if not completion.tool_calls:
+                if not completion.content.strip():
+                    raise RuntimeError("Agent returned an empty final response")
+                return completion.content.strip()
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": completion.content or None,
+                    "tool_calls": [
+                        {
+                            "id": call.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(
+                                    call.arguments,
+                                    ensure_ascii=False,
+                                ),
+                            },
+                        }
+                        for call in completion.tool_calls
+                    ],
+                }
+            )
+            for call in completion.tool_calls:
+                result = await self.harness.handle_tool_call(
+                    ToolCall(
+                        call_id=call.call_id,
+                        tool_name=call.name,
+                        arguments=call.arguments,
+                        requested_by=self.name,
+                    ),
+                    state=state,
+                    context=tool_context,
+                    allowed_tools=allowed_tools,
+                )
+                self._record_tool_result(
+                    tool_name=call.name,
+                    call_id=call.call_id,
+                    result=result,
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.call_id,
+                        "name": call.name,
+                        "content": json.dumps(
+                            result.model_dump(mode="json"),
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
+
+        raise RuntimeError("Agent Tool loop reached its maximum iterations")
+
+    def _record_tool_result(
+        self,
+        *,
+        tool_name: str,
+        call_id: str,
+        result: object,
+    ) -> None:
+        """Keep a small normalized record for the Orchestrator result."""
+
+        if getattr(result, "success", False) and tool_name not in self._last_tools_used:
+            self._last_tools_used.append(tool_name)
+        self._last_tool_traces.append(
+            {
+                "agent_name": self.name,
+                "tool_name": tool_name,
+                "call_id": call_id,
+                "success": bool(getattr(result, "success", False)),
+                "error": getattr(result, "error", None),
+                "duration_ms": getattr(result, "duration_ms", None),
+            }
+        )
+
+    @property
+    def last_tools_used(self) -> list[str]:
+        """Return Tool names used during the latest Agent turn."""
+
+        return list(self._last_tools_used)
+
+    @property
+    def last_tool_traces(self) -> list[dict[str, object]]:
+        """Return Tool traces produced during the latest Agent turn."""
+
+        return [dict(trace) for trace in self._last_tool_traces]

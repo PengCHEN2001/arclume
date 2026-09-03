@@ -8,8 +8,11 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+from uuid import uuid4
 
 from agents.customer_service_agent import CustomerServiceAgent
+from agents.escalation_agent import EscalationAgent
+from agents.response_composer import ResponseComposer
 from core.intent_recognizer import IntentCategory, IntentRecognizer, IntentResult, UrgencyLevel
 from core.llm_utils import LLMConfigurationError, LLMRequestError
 
@@ -18,11 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class AgentType(str, Enum):
-    """The three executable domain Agents in the first multi-Agent version."""
+    """Executable Agent roles used by the routing layer."""
 
     GENERAL = "general"
     TECHNICAL = "technical"
     BILLING = "billing"
+    ESCALATION = "escalation"
 
 
 @dataclass
@@ -59,6 +63,8 @@ class AgentResponse:
     success: bool
     latency_ms: float = 0.0
     escalated: bool = False
+    tools_used: list[str] = field(default_factory=list)
+    tool_traces: list[dict[str, Any]] = field(default_factory=list)
     error: Exception | None = None
 
 
@@ -81,6 +87,7 @@ class RoutingDecision:
 class OrchestratorResult:
     """Public result returned to the API layer after orchestration."""
 
+    request_id: str
     response: str
     intent: IntentResult
     primary_agent: AgentType
@@ -89,6 +96,8 @@ class OrchestratorResult:
     routing_confidence: float = 0.0
     escalated: bool = False
     latency_ms: float = 0.0
+    tools_used: list[str] = field(default_factory=list)
+    tool_traces: list[dict[str, Any]] = field(default_factory=list)
 
 
 class AgentOrchestrator:
@@ -117,15 +126,28 @@ class AgentOrchestrator:
         general_agent: CustomerServiceAgent,
         technical_agent: CustomerServiceAgent,
         billing_agent: CustomerServiceAgent,
+        escalation_agent: CustomerServiceAgent | None = None,
         intent_recognizer: IntentRecognizer | None = None,
         confidence_threshold: float = 0.5,
+        response_composer: ResponseComposer | None = None,
     ) -> None:
         self.intent_recognizer = intent_recognizer or IntentRecognizer()
         self.confidence_threshold = confidence_threshold  # Clarification boundary
+        self.response_composer = response_composer or ResponseComposer()
+        self.escalation_agent = escalation_agent or EscalationAgent(
+            llm=general_agent.llm,
+            memory=general_agent.memory,
+            state_store=general_agent.state_store,
+            context_builder=general_agent.context_builder,
+            knowledge_base=general_agent.knowledge_base,
+            skill_loader=general_agent.skill_loader,
+            harness=general_agent.harness,
+        )
         self._pool: dict[AgentType, list[CustomerServiceAgent]] = {
             AgentType.GENERAL: [general_agent],
             AgentType.TECHNICAL: [technical_agent],
             AgentType.BILLING: [billing_agent],
+            AgentType.ESCALATION: [self.escalation_agent],
         }
         self._stats = {
             agent_type: [AgentStats() for _ in agents]
@@ -139,13 +161,16 @@ class AgentOrchestrator:
         user_id: str,
         conversation_id: str,
         history: list[dict[str, str]] | None = None,
+        request_id: str | None = None,
     ) -> OrchestratorResult:
         """Run intent recognition, routing, Agent execution, and fallback."""
 
+        request_id = request_id or str(uuid4())
         started = time.monotonic()
         analysis = await self.intent_recognizer.recognize(message, history=history)
         if self._needs_clarification(analysis, message):
             return OrchestratorResult(
+                request_id=request_id,
                 response=(
                     "I am not yet sure which issue you want to handle. "
                     "Please clarify whether this concerns an order or delivery, "
@@ -166,18 +191,23 @@ class AgentOrchestrator:
                 decision,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                request_id=request_id,
             )
             successful = [response for response in responses if response.success]
             if not successful:
                 self._raise_if_model_error(responses)
                 response_text = "The support Agents were unable to complete this request."
             else:
-                response_text = self._combine_responses(successful, decision)
+                response_text = self.response_composer.compose(
+                    successful,
+                    primary_agent=decision.primary_agent.value,
+                )
             escalated = analysis.urgency in {
                 UrgencyLevel.HIGH,
                 UrgencyLevel.CRITICAL,
             } or analysis.intent in self._ESCALATION_INTENTS
             return OrchestratorResult(
+                request_id=request_id,
                 response=response_text,
                 intent=analysis,
                 primary_agent=decision.primary_agent,
@@ -186,6 +216,8 @@ class AgentOrchestrator:
                 routing_confidence=decision.confidence,
                 escalated=escalated,
                 latency_ms=(time.monotonic() - started) * 1000,
+                tools_used=self._unique_tools(responses),
+                tool_traces=self._tool_traces(responses),
             )
 
         response = await self._execute(
@@ -195,6 +227,7 @@ class AgentOrchestrator:
             decision,
             user_id=user_id,
             conversation_id=conversation_id,
+            request_id=request_id,
             persist=True,
         )
         if not response.success and decision.primary_agent != AgentType.GENERAL:
@@ -206,6 +239,7 @@ class AgentOrchestrator:
                 decision,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                request_id=request_id,
                 persist=False,
             )
         if not response.success:
@@ -219,6 +253,7 @@ class AgentOrchestrator:
             UrgencyLevel.CRITICAL,
         } or analysis.intent in self._ESCALATION_INTENTS
         return OrchestratorResult(
+            request_id=request_id,
             response=response_text,
             intent=analysis,
             primary_agent=decision.primary_agent,
@@ -226,6 +261,8 @@ class AgentOrchestrator:
             routing_confidence=decision.confidence,
             escalated=escalated,
             latency_ms=(time.monotonic() - started) * 1000,
+            tools_used=list(response.tools_used),
+            tool_traces=list(response.tool_traces),
         )
 
     async def _run_parallel(
@@ -236,6 +273,7 @@ class AgentOrchestrator:
         *,
         user_id: str,
         conversation_id: str,
+        request_id: str,
     ) -> list[AgentResponse]:
         """Run the primary Agent and supporting Agents concurrently."""
 
@@ -247,6 +285,7 @@ class AgentOrchestrator:
                 decision,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                request_id=request_id,
                 persist=agent_type == decision.primary_agent,
             )
             for agent_type in decision.agent_types
@@ -262,6 +301,7 @@ class AgentOrchestrator:
         *,
         user_id: str,
         conversation_id: str,
+        request_id: str,
         persist: bool,
     ) -> AgentResponse:
         """Execute one Agent and update local performance statistics."""
@@ -281,6 +321,7 @@ class AgentOrchestrator:
                 message,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                request_id=request_id,
                 skill_names=self._skills_for(agent_type, analysis.intent),
                 knowledge_enabled=decision.use_rag,
                 intent=analysis.intent.value,
@@ -317,6 +358,8 @@ class AgentOrchestrator:
             success=True,
             latency_ms=elapsed,
             escalated=analysis.intent in self._ESCALATION_INTENTS,
+            tools_used=agent.last_tools_used,
+            tool_traces=agent.last_tool_traces,
         )
 
     def _make_decision(self, analysis: IntentResult) -> RoutingDecision:
@@ -324,7 +367,7 @@ class AgentOrchestrator:
 
         if analysis.urgency == UrgencyLevel.CRITICAL or analysis.intent in self._ESCALATION_INTENTS:
             return RoutingDecision(
-                primary_agent=AgentType.GENERAL,
+                primary_agent=AgentType.ESCALATION,
                 reason="Escalation or critical urgency uses the human-support path",
                 confidence=max(analysis.confidence, 0.8),
                 use_rag=False,
@@ -409,20 +452,21 @@ class AgentOrchestrator:
         )
 
     @staticmethod
-    def _combine_responses(
-        responses: list[AgentResponse],
-        decision: RoutingDecision,
-    ) -> str:
-        """Keep primary output first and label supporting domain evidence."""
+    def _unique_tools(responses: list[AgentResponse]) -> list[str]:
+        """Return Tool names in first-use order across all Agent responses."""
 
-        ordered = sorted(
-            responses,
-            key=lambda response: 0 if response.agent_type == decision.primary_agent else 1,
-        )
-        return "\n\n".join(
-            f"[{response.agent_type.value}]\n{response.content}"
-            for response in ordered
-        )
+        names: list[str] = []
+        for response in responses:
+            for name in response.tools_used:
+                if name not in names:
+                    names.append(name)
+        return names
+
+    @staticmethod
+    def _tool_traces(responses: list[AgentResponse]) -> list[dict[str, Any]]:
+        """Flatten Tool traces while keeping the Agent source on each record."""
+
+        return [trace for response in responses for trace in response.tool_traces]
 
     @staticmethod
     def _raise_if_model_error(responses: list[AgentResponse]) -> None:

@@ -6,7 +6,7 @@ from harness.executor import ToolDefinition, ToolExecutor
 from harness.policy import ToolRiskLevel
 
 
-ALLOWED_AGENT_NAMES = {"customer_service", "general", "technical", "billing"}
+ALLOWED_AGENT_NAMES = {"customer_service", "general", "technical", "billing", "escalation"}
 
 
 async def knowledge_search(
@@ -22,6 +22,137 @@ async def knowledge_search(
         arguments["query"],
         top_k=arguments.get("top_k", 3),
     )
+
+
+def suggest_required_fields(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Suggest only the missing fields needed for the current support intent."""
+
+    intent = str((context or {}).get("intent") or "other")
+    entities = (context or {}).get("entities") or {}
+    required_by_intent = {
+        "order_status": ["order_id"],
+        "logistics": ["order_id or tracking_id"],
+        "refund": ["order_id", "amount"],
+        "payment_issue": ["order_id", "amount", "date"],
+        "technical_login": ["error message", "environment"],
+        "technical_crash": ["error message", "app version", "environment"],
+    }
+    required = required_by_intent.get(intent, ["a clear description of the issue"])
+    missing = [
+        field
+        for field in required
+        if not any(entities.get(option) for option in field.split(" or "))
+    ]
+    return {"intent": intent, "missing_fields": missing, "known_entities": entities}
+
+
+def inspect_request_context(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return the non-sensitive structured information already available to an Agent."""
+
+    data = context or {}
+    return {
+        "intent": data.get("intent"),
+        "entities": data.get("entities") or {},
+        "agent_name": data.get("agent_name"),
+        "requested_focus": str(arguments.get("focus", "general"))[:40],
+    }
+
+
+def lookup_error_code(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Explain common error codes without claiming access to backend logs."""
+
+    code = str(arguments.get("error_code", "")).upper().strip()
+    mapping = {
+        "401": ("Authentication failed", ["Check session or credentials", "Try a safe sign-in reset"]),
+        "403": ("Permission denied", ["Check account permissions", "Confirm the requested resource"]),
+        "404": ("Resource not found", ["Check the resource identifier", "Confirm the service environment"]),
+        "500": ("Server-side failure", ["Retry later", "Record the time and request details for support"]),
+    }
+    meaning, next_steps = mapping.get(
+        code,
+        ("Unknown error code", ["Provide the full error message and the environment"]),
+    )
+    return {"error_code": code, "meaning": meaning, "next_steps": next_steps, "backend_logs_checked": False}
+
+
+def build_diagnostic_plan(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Create a low-risk troubleshooting order without changing external systems."""
+
+    environment = str(arguments.get("environment", "unknown"))[:80]
+    reproduced = bool(arguments.get("reproduced", False))
+    steps = [
+        "Capture the complete error message",
+        "Check network, permissions, and configuration",
+        "Confirm the version and the latest change",
+    ]
+    if reproduced:
+        steps.append("Reproduce with the smallest safe request and record the result")
+    return {"environment": environment, "reproduced": reproduced, "diagnostic_steps": steps}
+
+
+def check_billing_fields(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Check billing information without connecting to a payment system."""
+
+    data = context or {}
+    entities = data.get("entities") or {}
+    fields = {
+        "order_id": bool(entities.get("order_id")),
+        "amount": bool(entities.get("amount")),
+        "date": bool(entities.get("date")),
+        "payment_channel": bool(arguments.get("payment_channel")),
+    }
+    return {
+        "fields": fields,
+        "missing_fields": [name for name, present in fields.items() if not present],
+        "can_confirm_refund": False,
+    }
+
+
+def compare_amounts(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Calculate a difference between two user-provided amounts only."""
+
+    first = float(arguments["amount_a"])
+    second = float(arguments["amount_b"])
+    return {
+        "amount_a": first,
+        "amount_b": second,
+        "difference": round(first - second, 2),
+        "interpretation": "This is arithmetic only; it does not confirm a duplicate charge.",
+    }
+
+
+def create_handoff_summary(
+    arguments: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Create a safe handoff summary without creating a real ticket."""
+
+    data = context or {}
+    return {
+        "request_id": data.get("request_id"),
+        "reason": str(arguments.get("reason", "Further human review is required"))[:120],
+        "intent": data.get("intent"),
+        "entities": data.get("entities") or {},
+        "ticket_created": False,
+    }
 
 
 def order_query(
@@ -88,6 +219,110 @@ def register_tools(executor: ToolExecutor) -> ToolExecutor:
             risk_level=ToolRiskLevel.LOW,
             timeout_seconds=10.0,
             allowed_agents=set(ALLOWED_AGENT_NAMES),
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="suggest_required_fields",
+            description="Suggest the missing fields needed to continue a support request.",
+            handler=suggest_required_fields,
+            input_schema={"type": "object", "properties": {}},
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"general"},
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="inspect_request_context",
+            description="Inspect the structured, non-sensitive context already available for this request.",
+            handler=inspect_request_context,
+            input_schema={
+                "type": "object",
+                "properties": {"focus": {"type": "string"}},
+            },
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"general"},
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="lookup_error_code",
+            description="Explain a common error code and safe next checks.",
+            handler=lookup_error_code,
+            input_schema={
+                "type": "object",
+                "required": ["error_code"],
+                "properties": {"error_code": {"type": "string"}},
+            },
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"technical"},
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="build_diagnostic_plan",
+            description="Build a low-risk troubleshooting plan from the environment and reproduction status.",
+            handler=build_diagnostic_plan,
+            input_schema={
+                "type": "object",
+                "required": ["environment", "reproduced"],
+                "properties": {
+                    "environment": {"type": "string"},
+                    "reproduced": {"type": "boolean"},
+                },
+            },
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"technical"},
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="check_billing_fields",
+            description="Check whether the known billing fields are sufficient for verification.",
+            handler=check_billing_fields,
+            input_schema={
+                "type": "object",
+                "properties": {"payment_channel": {"type": "string"}},
+            },
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"billing"},
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="compare_amounts",
+            description="Calculate the difference between two explicitly provided amounts.",
+            handler=compare_amounts,
+            input_schema={
+                "type": "object",
+                "required": ["amount_a", "amount_b"],
+                "properties": {
+                    "amount_a": {"type": "number"},
+                    "amount_b": {"type": "number"},
+                },
+            },
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"billing"},
+        )
+    )
+    executor.register(
+        ToolDefinition(
+            name="create_handoff_summary",
+            description="Create a structured human-support handoff summary without creating a ticket.",
+            handler=create_handoff_summary,
+            input_schema={
+                "type": "object",
+                "properties": {"reason": {"type": "string"}},
+            },
+            risk_level=ToolRiskLevel.LOW,
+            timeout_seconds=5.0,
+            allowed_agents={"escalation"},
         )
     )
     executor.register(

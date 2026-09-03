@@ -64,6 +64,7 @@ class HarnessRuntime:
         *,
         state: AgentState | None = None,
         context: dict[str, Any] | None = None,
+        allowed_tools: set[str] | None = None,
     ) -> ToolResult:
         """Check and execute one ToolCall through the Harness boundary.
 
@@ -80,7 +81,12 @@ class HarnessRuntime:
             data={"argument_keys": sorted(call.arguments)},
         )
 
-        decision = self.policy.evaluate(call, tool, state)  # Allow, deny, or pause
+        decision = self.policy.evaluate(
+            call,
+            tool,
+            state,
+            allowed_tools=allowed_tools,
+        )  # Allow, deny, or pause
         self.tracer.record(
             TraceEventType.POLICY_EVALUATED,
             call_id=call.call_id,
@@ -121,6 +127,42 @@ class HarnessRuntime:
             },
         )
         return result
+
+    def tool_schemas(
+        self,
+        *,
+        agent_name: str,
+        allowed_tools: list[str] | set[str] | None = None,
+        enabled_tools: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return OpenAI-compatible schemas for the Agent's allowed Tools."""
+
+        scope = set(allowed_tools) if allowed_tools is not None else None
+        enabled = set(enabled_tools) if enabled_tools is not None else None
+        schemas: list[dict[str, Any]] = []
+        for tool in self.executor.list_tools():
+            if not tool.enabled:
+                continue
+            if scope is not None and tool.name not in scope:
+                continue
+            if enabled is not None and tool.name not in enabled:
+                continue
+            if tool.allowed_agents and agent_name not in tool.allowed_agents:
+                continue
+            schemas.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.input_schema or {
+                            "type": "object",
+                            "properties": {},
+                        },
+                    },
+                }
+            )
+        return schemas
 
     async def run(
         self,
