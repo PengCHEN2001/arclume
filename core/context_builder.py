@@ -23,6 +23,9 @@ class ContextBuilder:
         user_message: str,
         *,
         conversation_history: list[ContextMessage] | None = None,
+        memory_summary: str | None = None,
+        episodic_memories: list[dict[str, Any]] | None = None,
+        user_profile: dict[str, Any] | None = None,
         state: AgentState | None = None,
         knowledge_results: list[dict[str, Any]] | None = None,
         skill_instructions: list[str] | None = None,
@@ -31,9 +34,8 @@ class ContextBuilder:
     ) -> Context:
         """Create one Context from already-loaded request materials.
 
-        This first version only normalizes and combines data. It does not
-        limit message length, count tokens, summarize history, or retrieve
-        additional information.
+        This method only normalizes and combines data. Memory loading and
+        compression happen in the memory layer before this method is called.
         """
 
         cleaned_message = user_message.strip()  # Current user request
@@ -43,6 +45,9 @@ class ContextBuilder:
         return Context(
             user_message=cleaned_message,
             conversation_history=list(conversation_history or []),
+            memory_summary=memory_summary.strip() if memory_summary else None,
+            episodic_memories=list(episodic_memories or []),
+            user_profile=dict(user_profile or {}),
             state=state,
             system_instructions=list(self.system_instructions),
             knowledge_results=list(knowledge_results or []),
@@ -65,7 +70,7 @@ class ContextBuilder:
 
     @staticmethod
     def render_history(context: Context) -> list[dict[str, str]]:
-        """Render state, optional evidence, and prior messages before the user turn.
+        """Render state, memory, evidence, and prior messages before the user turn.
 
         The current user message is intentionally not included here because
         LLMClient appends it after this history. This keeps the current request
@@ -105,6 +110,32 @@ class ContextBuilder:
                     "role": "system",
                     "content": "[Active instructions]\n"
                     + "\n".join(context.skill_instructions),
+                }
+            )
+
+        if context.memory_summary:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "[Conversation summary]\n" + context.memory_summary,
+                }
+            )
+
+        if context.episodic_memories:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "[Relevant past conversations]\n"
+                    + ContextBuilder._json_text(context.episodic_memories),
+                }
+            )
+
+        if context.user_profile:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "[User profile]\n"
+                    + ContextBuilder._json_text(context.user_profile),
                 }
             )
 

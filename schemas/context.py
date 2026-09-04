@@ -1,9 +1,8 @@
 """Temporary context structures used to prepare one model request.
 
-Context is assembled for a request and is not a long-term memory record. The
-future ContextBuilder will decide which fields to populate and in what order.
-This module only defines the shared shape that the builder and Agent runtime can
-agree on.
+Context is assembled for one request and is not a long-term memory record.
+Memory adapters provide summaries, episodic records, and profiles; the
+ContextBuilder decides which of those materials enter the model request.
 """
 
 from typing import Any, Literal
@@ -26,6 +25,9 @@ class Context(BaseModel):
 
     user_message: str = Field(min_length=1)
     conversation_history: list[ContextMessage] = Field(default_factory=list)
+    memory_summary: str | None = None
+    episodic_memories: list[dict[str, Any]] = Field(default_factory=list)
+    user_profile: dict[str, Any] = Field(default_factory=dict)
     state: AgentState | None = None
     system_instructions: list[str] = Field(default_factory=list)
     knowledge_results: list[dict[str, Any]] = Field(default_factory=list)

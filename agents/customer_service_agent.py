@@ -105,6 +105,7 @@ class CustomerServiceAgent:
         supporting_agents: list[str] | None = None,
         routing_reason: str | None = None,
         request_id: str | None = None,
+        memory_context: dict[str, object] | None = None,
         persist: bool = True,
     ) -> str:
         """Process one turn, including Context construction and persistence.
@@ -128,15 +129,23 @@ class CustomerServiceAgent:
             raise ValueError("conversation_id is required when persistence is enabled")
 
         history: list[ContextMessage] = []
+        loaded_memory: dict[str, object] = dict(memory_context or {})
         state: AgentState | None = None
 
         if conversation_id and self.memory:
-            history = await self.memory.get_messages(user_id, conversation_id)
+            if not loaded_memory:
+                loaded_memory = await self.memory.get_context(
+                    user_id,
+                    conversation_id,
+                    query=cleaned_message,
+                )
+            history = list(loaded_memory.get("recent_messages") or [])
             if persist:
                 await self.memory.add_message(
                     user_id,
                     conversation_id,
                     ContextMessage(role="user", content=cleaned_message),
+                    compact=False,
                 )
 
         if conversation_id and self.state_store:
@@ -238,6 +247,11 @@ class CustomerServiceAgent:
         context = self.context_builder.build(
             cleaned_message,
             conversation_history=history,
+            memory_summary=self._memory_text(loaded_memory.get("summary")),
+            episodic_memories=self._memory_records(
+                loaded_memory.get("episodic_memories")
+            ),
+            user_profile=self._memory_profile(loaded_memory.get("user_profile")),
             state=state,
             knowledge_results=knowledge_results,
             skill_instructions=skill_instructions,
@@ -282,6 +296,12 @@ class CustomerServiceAgent:
                 user_id,
                 conversation_id,
                 ContextMessage(role="assistant", content=answer),
+            )
+            await self.memory.update_profile(
+                user_id,
+                conversation_id,
+                message=cleaned_message,
+                entities=entities,
             )
 
         if persist and conversation_id and self.state_store and state:
@@ -329,6 +349,26 @@ class CustomerServiceAgent:
             f"Allowed Tools: {', '.join(self.profile.tool_scope) or 'none'}\n"
             "Do not claim that an unavailable query, refund, account change, or ticket action was completed."
         )
+
+    @staticmethod
+    def _memory_text(value: object) -> str | None:
+        """Accept only a non-empty string as a conversation summary."""
+
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    @staticmethod
+    def _memory_records(value: object) -> list[dict[str, object]]:
+        """Keep only structured episodic records for Context."""
+
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, dict)]
+
+    @staticmethod
+    def _memory_profile(value: object) -> dict[str, object]:
+        """Keep only a structured user profile for Context."""
+
+        return dict(value) if isinstance(value, dict) else {}
 
     def _tool_context(
         self,

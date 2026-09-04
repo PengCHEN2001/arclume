@@ -20,6 +20,7 @@ from knowledge import KnowledgeBaseError
 from knowledge.knowledge_base import KnowledgeBase
 from memory import MemoryStoreError
 from memory.conversation_memory import ConversationMemory
+from memory.long_term_memory import LongTermMemory
 from memory.state_store import StateStore
 from schemas.api import ChatRequest, ChatResponse
 from schemas.tool import ToolCall
@@ -47,7 +48,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.llm = LLMClient.from_environment()
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    app.state.memory = ConversationMemory.from_url(redis_url)
+    app.state.long_term_memory = LongTermMemory.from_environment()
+    try:
+        await app.state.long_term_memory.initialize_async()
+    except MemoryStoreError as exc:
+        logger.warning("Long-term memory is not ready; chat will continue with Redis: %s", exc)
+        app.state.long_term_memory = None
+    app.state.memory = ConversationMemory.from_environment(
+        redis_url=redis_url,
+        llm=app.state.llm,
+        long_term_memory=app.state.long_term_memory,
+    )
     app.state.state_store = StateStore.from_url(redis_url)
     app.state.knowledge_base = KnowledgeBase.from_environment()
     try:
@@ -93,6 +104,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     await app.state.memory.close()
     await app.state.state_store.close()
+    if app.state.long_term_memory is not None:
+        await app.state.long_term_memory.close()
     await app.state.knowledge_base.close()
     await app.state.llm.close()
     logger.info("Arclume API stopped")
@@ -126,6 +139,17 @@ async def health(request: Request) -> dict[str, object]:
             "ready": request.app.state.knowledge_base.mode is not None,
             "mode": request.app.state.knowledge_base.mode,
         },
+        "memory": {
+            "working_memory_ttl_seconds": request.app.state.memory.ttl_seconds,
+            "compress_at": request.app.state.memory.compress_at,
+            "retain_messages": request.app.state.memory.retain_messages,
+            "summary_ttl_seconds": request.app.state.memory.summary_ttl_seconds,
+            "long_term_mode": (
+                request.app.state.long_term_memory.mode
+                if request.app.state.long_term_memory is not None
+                else None
+            ),
+        },
         "skills": request.app.state.skill_loader.list_available(),
         "tools": [tool.name for tool in request.app.state.tool_executor.list_tools()],
         "tool_stats": request.app.state.harness.tool_stats(),
@@ -147,16 +171,21 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
     orchestrator: AgentOrchestrator = request.app.state.orchestrator
     conversation_id = payload.conversation_id or str(uuid4())
     try:
-        stored_history = await request.app.state.memory.get_messages(
+        memory_context = await request.app.state.memory.get_context(
             payload.user_id,
             conversation_id,
+            query=payload.message,
         )
-        history = [message.model_dump() for message in stored_history]
+        history = [
+            message.model_dump()
+            for message in memory_context["recent_messages"]
+        ]
         result = await orchestrator.run(
             payload.message,
             user_id=payload.user_id,
             conversation_id=conversation_id,
             history=history,
+            memory_context=memory_context,
         )
     except LLMConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

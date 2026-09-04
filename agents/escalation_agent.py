@@ -55,6 +55,7 @@ class EscalationAgent(CustomerServiceAgent):
                 user_id,
                 conversation_id,
                 ContextMessage(role="user", content=cleaned_message),
+                compact=False,
             )
 
         if conversation_id and self.state_store:
@@ -94,5 +95,11 @@ class EscalationAgent(CustomerServiceAgent):
                 user_id,
                 conversation_id,
                 ContextMessage(role="assistant", content=response),
+            )
+            await self.memory.update_profile(
+                user_id,
+                conversation_id,
+                message=cleaned_message,
+                entities=entities,
             )
         return response

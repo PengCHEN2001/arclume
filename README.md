@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The eleventh stage adds governed RAG retrieval and reliable internal Tool
-execution on top of the structured multi-Agent orchestrator:
+The twelfth stage adds layered conversation memory on top of the governed RAG
+and structured multi-Agent runtime:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -32,9 +32,16 @@ execution on top of the structured multi-Agent orchestrator:
   records basic Agent performance, exposes request-level Tool information, and
   falls back to the General Agent.
 - `core/context_builder.py` assembles the temporary model context from the
-  current message, conversation history, AgentState, and retrieved evidence.
-- `memory/` stores recent conversation messages and active-case `AgentState`
-  records in Redis.
+  current message, recent history, session summary, episodic memory, user
+  profile, AgentState, and retrieved evidence.
+- `memory/conversation_memory.py` stores Redis working memory and session
+  summaries, compacts older messages, and coordinates long-term memory reads.
+- `memory/long_term_memory.py` stores episodic summaries and user profiles in
+  separate ChromaDB collections.
+- `memory/state_store.py` keeps active-case `AgentState` records in Redis; State
+  remains separate from conversation memory.
+- `tests/test_memory.py` verifies Memory compression, long-term recall, and the
+  Redis/ChromaDB failure boundary without external services.
 - `knowledge/knowledge_base.py` indexes document chunks in ChromaDB and returns
   semantic search results for one request.
 - `data/demo_docs/` contains small English policy documents for local RAG tests.
@@ -61,8 +68,7 @@ execution on top of the structured multi-Agent orchestrator:
   creation is marked high risk and stops for approval.
 - The current Agent Tool loop is bounded and only runs when the configured provider
   supports compatible function calling; otherwise the text path remains active.
-- Three-tier long-term memory, context compression, monitoring, evaluation, and
-  automatic Skill evolution are not implemented yet.
+- Monitor, Evaluation, and automatic Skill evolution are not implemented yet.
 
 ## Python environment
 
@@ -113,6 +119,17 @@ docker compose ps
 docker compose logs -f api
 ```
 
-The current application uses Redis for short-term memory and AgentState. ChromaDB
-stores the current knowledge collection. The application can start while ChromaDB
-is unavailable; RAG is skipped until the service becomes available.
+The current application uses Redis for working memory, session summaries, and
+AgentState. ChromaDB stores the knowledge base, episodic summaries, and user
+profiles in separate collections. Memory compression uses a local factual
+fallback by default; set `ARCLUME_MEMORY_LLM_ENABLED=true` only when the extra
+summary and profile-extraction model calls are desired. The application can
+continue with Redis-only memory while ChromaDB is unavailable. Redis is a core
+chat dependency: if its working-memory read or write fails, `/chat` returns
+`503` instead of silently pretending that no history exists.
+
+Run the dependency-free Memory tests with:
+
+```bash
+python -m unittest discover -s tests -p 'test_*.py' -v
+```

@@ -161,6 +161,7 @@ class AgentOrchestrator:
         user_id: str,
         conversation_id: str,
         history: list[dict[str, str]] | None = None,
+        memory_context: dict[str, object] | None = None,
         request_id: str | None = None,
     ) -> OrchestratorResult:
         """Run intent recognition, routing, Agent execution, and fallback."""
@@ -192,6 +193,7 @@ class AgentOrchestrator:
                 user_id=user_id,
                 conversation_id=conversation_id,
                 request_id=request_id,
+                memory_context=memory_context,
             )
             successful = [response for response in responses if response.success]
             if not successful:
@@ -228,6 +230,7 @@ class AgentOrchestrator:
             user_id=user_id,
             conversation_id=conversation_id,
             request_id=request_id,
+            memory_context=memory_context,
             persist=True,
         )
         if not response.success and decision.primary_agent != AgentType.GENERAL:
@@ -240,6 +243,7 @@ class AgentOrchestrator:
                 user_id=user_id,
                 conversation_id=conversation_id,
                 request_id=request_id,
+                memory_context=memory_context,
                 persist=False,
             )
         if not response.success:
@@ -274,6 +278,7 @@ class AgentOrchestrator:
         user_id: str,
         conversation_id: str,
         request_id: str,
+        memory_context: dict[str, object] | None,
     ) -> list[AgentResponse]:
         """Run the primary Agent and supporting Agents concurrently."""
 
@@ -286,6 +291,7 @@ class AgentOrchestrator:
                 user_id=user_id,
                 conversation_id=conversation_id,
                 request_id=request_id,
+                memory_context=memory_context,
                 persist=agent_type == decision.primary_agent,
             )
             for agent_type in decision.agent_types
@@ -302,6 +308,7 @@ class AgentOrchestrator:
         user_id: str,
         conversation_id: str,
         request_id: str,
+        memory_context: dict[str, object] | None,
         persist: bool,
     ) -> AgentResponse:
         """Execute one Agent and update local performance statistics."""
@@ -322,6 +329,7 @@ class AgentOrchestrator:
                 user_id=user_id,
                 conversation_id=conversation_id,
                 request_id=request_id,
+                memory_context=memory_context,
                 skill_names=self._skills_for(agent_type, analysis.intent),
                 knowledge_enabled=decision.use_rag,
                 intent=analysis.intent.value,
