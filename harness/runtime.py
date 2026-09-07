@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from harness.executor import ToolExecutor
 from harness.policy import PolicyAction, ToolPolicy
-from harness.trace import TraceEventType, TraceRecorder
+from harness.trace import TraceEvent, TraceEventType, TraceRecorder
 from schemas.state import AgentState
 from schemas.tool import ToolCall, ToolResult
 
@@ -58,6 +58,34 @@ class HarnessRuntime:
         self.tracer = tracer or TraceRecorder()    # In-memory execution events
         self.max_iterations = max_iterations       # Loop safety limit
 
+    def record_trace(
+        self,
+        event_type: TraceEventType,
+        *,
+        request_id: str | None = None,
+        conversation_id: str | None = None,
+        agent_name: str | None = None,
+        call_id: str | None = None,
+        tool_name: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> TraceEvent:
+        """Record a request-level event for callers outside the Harness loop."""
+
+        return self.tracer.record(
+            event_type,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            agent_name=agent_name,
+            call_id=call_id,
+            tool_name=tool_name,
+            data=data,
+        )
+
+    def trace_events(self, request_id: str) -> list[TraceEvent]:
+        """Return the retained events for one request."""
+
+        return self.tracer.events(request_id)
+
     async def handle_tool_call(
         self,
         call: ToolCall,
@@ -74,8 +102,12 @@ class HarnessRuntime:
         """
 
         tool = self.executor.get(call.tool_name)  # Used by Policy evaluation
+        trace_request_id, trace_conversation_id, trace_agent_name = self._trace_context(context)
         self.tracer.record(
             TraceEventType.DECISION_RECEIVED,
+            request_id=trace_request_id,
+            conversation_id=trace_conversation_id,
+            agent_name=trace_agent_name,
             call_id=call.call_id,
             tool_name=call.tool_name,
             data={"argument_keys": sorted(call.arguments)},
@@ -89,6 +121,9 @@ class HarnessRuntime:
         )  # Allow, deny, or pause
         self.tracer.record(
             TraceEventType.POLICY_EVALUATED,
+            request_id=trace_request_id,
+            conversation_id=trace_conversation_id,
+            agent_name=trace_agent_name,
             call_id=call.call_id,
             tool_name=call.tool_name,
             data={
@@ -99,25 +134,53 @@ class HarnessRuntime:
         )
 
         if decision.action is PolicyAction.DENY:
-            return ToolResult(
+            result = ToolResult(
                 call_id=call.call_id,
                 tool_name=call.tool_name,
                 success=False,
                 error=decision.reason,
             )
+            self.tracer.record(
+                TraceEventType.TOOL_EXECUTION_FINISHED,
+                request_id=trace_request_id,
+                conversation_id=trace_conversation_id,
+                agent_name=trace_agent_name,
+                call_id=call.call_id,
+                tool_name=call.tool_name,
+                data={"success": False, "blocked": True, "reason": decision.reason},
+            )
+            return result
 
         if decision.action is PolicyAction.REQUIRE_APPROVAL:
-            return ToolResult(
+            result = ToolResult(
                 call_id=call.call_id,
                 tool_name=call.tool_name,
                 success=False,
                 error=decision.reason,
                 requires_approval=True,
             )
+            self.tracer.record(
+                TraceEventType.TOOL_EXECUTION_FINISHED,
+                request_id=trace_request_id,
+                conversation_id=trace_conversation_id,
+                agent_name=trace_agent_name,
+                call_id=call.call_id,
+                tool_name=call.tool_name,
+                data={
+                    "success": False,
+                    "blocked": True,
+                    "requires_approval": True,
+                    "reason": decision.reason,
+                },
+            )
+            return result
 
         result = await self.executor.execute(call, context)  # Execute after approval
         self.tracer.record(
             TraceEventType.TOOL_EXECUTION_FINISHED,
+            request_id=trace_request_id,
+            conversation_id=trace_conversation_id,
+            agent_name=trace_agent_name,
             call_id=call.call_id,
             tool_name=call.tool_name,
             data={
@@ -192,7 +255,13 @@ class HarnessRuntime:
 
         working_context = dict(context or {})  # Context shared between rounds
         tool_results: list[ToolResult] = []    # Results produced in this run
-        self.tracer.record(TraceEventType.RUNTIME_STARTED)
+        request_id, conversation_id, agent_name = self._trace_context(working_context)
+        self.tracer.record(
+            TraceEventType.RUNTIME_STARTED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            agent_name=agent_name,
+        )
 
         for iteration in range(1, self.max_iterations + 1):
             # Ask the future Agent or model for the next action.
@@ -204,6 +273,9 @@ class HarnessRuntime:
                 if isinstance(decision, str):
                     self.tracer.record(
                         TraceEventType.RUNTIME_COMPLETED,
+                        request_id=request_id,
+                        conversation_id=conversation_id,
+                        agent_name=agent_name,
                         data={"iterations": iteration},
                     )
                     return RuntimeOutcome(
@@ -230,6 +302,9 @@ class HarnessRuntime:
                 if result.requires_approval:
                     self.tracer.record(
                         TraceEventType.RUNTIME_STOPPED,
+                        request_id=request_id,
+                        conversation_id=conversation_id,
+                        agent_name=agent_name,
                         call_id=decision.call_id,
                         tool_name=decision.tool_name,
                         data={"reason": "approval_required"},
@@ -247,6 +322,9 @@ class HarnessRuntime:
                 error = str(exc) or "Harness runtime failed"
                 self.tracer.record(
                     TraceEventType.RUNTIME_FAILED,
+                    request_id=request_id,
+                    conversation_id=conversation_id,
+                    agent_name=agent_name,
                     data={"error": error, "iterations": iteration},
                 )
                 return RuntimeOutcome(
@@ -259,6 +337,9 @@ class HarnessRuntime:
         # Stop safely when the Agent keeps requesting actions without finishing.
         self.tracer.record(
             TraceEventType.RUNTIME_STOPPED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            agent_name=agent_name,
             data={"reason": "max_iterations", "iterations": self.max_iterations},
         )
         return RuntimeOutcome(
@@ -266,4 +347,17 @@ class HarnessRuntime:
             tool_results=tool_results,
             iterations=self.max_iterations,
             error="Maximum Harness iterations reached",
+        )
+
+    @staticmethod
+    def _trace_context(
+        context: dict[str, Any] | None,
+    ) -> tuple[str | None, str | None, str | None]:
+        """Read trace correlation fields from a Tool or runtime context."""
+
+        values = context or {}
+        return (
+            str(values["request_id"]) if values.get("request_id") else None,
+            str(values["conversation_id"]) if values.get("conversation_id") else None,
+            str(values["agent_name"]) if values.get("agent_name") else None,
         )

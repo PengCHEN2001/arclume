@@ -5,8 +5,9 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The thirteenth stage adds real Hybrid RAG on top of the layered Memory,
-governed Tool execution, and structured multi-Agent runtime:
+The fourteenth stage adds metadata-driven Skills and complete request tracing
+on top of Hybrid RAG, layered Memory, governed Tool execution, and the
+structured multi-Agent runtime:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -14,6 +15,8 @@ governed Tool execution, and structured multi-Agent runtime:
 - `schemas/` defines shared API, state, context, and tool models.
 - `harness/` separates policy decisions, Tool execution, tracing, and the
   model-independent Agent loop skeleton.
+- `harness/trace.py` records request, routing, Skill, RAG, Agent, Tool, Memory,
+  and response events with bounded in-memory retention.
 - `agents/customer_service_agent.py` provides shared execution logic for domain
   Agents, renders each AgentProfile, and supports a bounded model Tool loop.
 - `agents/agent_profile.py` defines each Agent's role, mission, workflow,
@@ -49,9 +52,11 @@ governed Tool execution, and structured multi-Agent runtime:
 - `knowledge/hybrid_retriever.py` runs dense and BM25 recall in parallel and
   combines their ranked results with Reciprocal Rank Fusion.
 - `data/demo_docs/` contains small English policy documents for local RAG tests.
-- `core/skill_loader.py` loads human-authored Markdown Skill instructions without
-  allowing the Agent to modify them.
-- `skills/` contains refund, logistics, technical, and human-escalation instructions.
+- `core/skill_loader.py` loads human-authored Markdown Skills, parses metadata,
+  filters by Agent and keywords, supports SKILL.md/Markdown/text/JSON inputs,
+  enforces a bounded prompt budget, and supports mtime-aware hot reload.
+- `skills/` contains metadata-driven refund, logistics, technical, and
+  human-escalation instructions.
 - `tools/tool_functions.py` contains the current Tool functions and registers
   them in the shared Harness Executor.
 - `tools/tool_manager.py` coordinates query rewriting, parallel recall,
@@ -68,11 +73,14 @@ governed Tool execution, and structured multi-Agent runtime:
   RRF fusion, deduplication, and local or optional model reranking.
 - `/knowledge/search`, `/knowledge/stats`, and `/tools/stats` provide model-free
   retrieval and reliability checks.
+- `/skills` lists Skill metadata and `/skills/reload` reloads edited Skill files.
+- `/traces/{request_id}` exposes the retained request-level execution trace.
 - Order and logistics Tools currently return deterministic mock data. Ticket
   creation is marked high risk and stops for approval.
 - The current Agent Tool loop is bounded and only runs when the configured provider
   supports compatible function calling; otherwise the text path remains active.
-- Monitor, Evaluation, and automatic Skill evolution are not implemented yet.
+- Monitor and Evaluation are not implemented yet. Automatic Skill generation,
+  modification, publication, and rollback remain intentionally disabled.
 
 ## Python environment
 

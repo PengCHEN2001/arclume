@@ -1,3 +1,11 @@
+---
+name: logistics
+description: Handle delivery, tracking, delays, and address-change questions.
+keywords: shipping, delivery, tracking, parcel, package, delay, address
+agents: general
+enabled: true
+---
+
 # Logistics Handling Skill
 
 ## Purpose

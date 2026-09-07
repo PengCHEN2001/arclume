@@ -1,3 +1,11 @@
+---
+name: escalation
+description: Prepare safe human-support handoffs and preserve the case context.
+keywords: human, representative, manager, complaint, escalation, urgent
+agents: escalation
+enabled: true
+---
+
 # Human Escalation Skill
 
 ## Purpose

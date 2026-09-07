@@ -11,6 +11,7 @@ from agents.agent_profile import AgentProfile
 from core.llm_utils import LLMClient
 from core.skill_loader import SkillError, SkillLoader
 from harness.runtime import HarnessRuntime
+from harness.trace import TraceEventType
 from knowledge import KnowledgeBaseError
 from knowledge.knowledge_base import KnowledgeBase
 from memory.conversation_memory import ConversationMemory
@@ -199,6 +200,7 @@ class CustomerServiceAgent:
                         state=state,
                         context=self._tool_context(
                             state=state,
+                            conversation_id=conversation_id,
                             intent=intent,
                             entities=entities,
                             request_id=request_id,
@@ -226,23 +228,45 @@ class CustomerServiceAgent:
                 # Retrieval is helpful evidence, but it must not take down chat.
                 logger.warning("Knowledge retrieval skipped: %s", exc)
 
+        self._record_trace(
+            TraceEventType.RAG_COMPLETED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={
+                "enabled": knowledge_enabled,
+                "tool_loop_active": tool_loop_active,
+                "result_count": len(knowledge_results),
+            },
+        )
+
         selected_skill_names = (
             list(skill_names) if skill_names is not None else self.default_skill_names
         )
         skill_instructions: list[str] = []
-        if selected_skill_names and self.skill_loader:
+        selected_skill_documents = []
+        if self.skill_loader:
             try:
-                skill_documents = await asyncio.to_thread(
-                    self.skill_loader.load_many,
+                selected_skill_documents = await asyncio.to_thread(
+                    self.skill_loader.select_for_agent,
+                    self.name,
+                    cleaned_message,
                     selected_skill_names,
                 )
-                skill_instructions = [
-                    f"[Skill: {document.name}]\n{document.content}"
-                    for document in skill_documents
-                ]
+                skill_prompt = self.skill_loader.render(selected_skill_documents)
+                if skill_prompt:
+                    skill_instructions = [skill_prompt]
             except SkillError as exc:
                 # A missing optional Skill should not break the base assistant.
                 logger.warning("Skill loading skipped: %s", exc)
+        self._record_trace(
+            TraceEventType.SKILLS_SELECTED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={
+                "skills": [document.name for document in selected_skill_documents],
+                "requested": selected_skill_names,
+            },
+        )
 
         context = self.context_builder.build(
             cleaned_message,
@@ -284,6 +308,7 @@ class CustomerServiceAgent:
                 intent=intent,
                 entities=entities,
                 request_id=request_id,
+                conversation_id=conversation_id,
             )
         else:
             llm_kwargs = {"system_prompt": system_prompt}
@@ -318,6 +343,16 @@ class CustomerServiceAgent:
                 }
             )
             await self.state_store.save(state)
+
+        self._record_trace(
+            TraceEventType.MEMORY_UPDATED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={
+                "conversation_persisted": bool(persist and conversation_id and self.memory),
+                "state_persisted": bool(persist and conversation_id and self.state_store),
+            },
+        )
 
         return answer
 
@@ -374,6 +409,7 @@ class CustomerServiceAgent:
         self,
         *,
         state: AgentState | None,
+        conversation_id: str | None,
         intent: str | None,
         entities: dict[str, object] | None,
         request_id: str | None,
@@ -385,10 +421,30 @@ class CustomerServiceAgent:
             "tool_manager": self.harness.executor if self.harness else None,
             "state": state,
             "agent_name": self.name,
+            "conversation_id": conversation_id,
             "intent": intent,
             "entities": dict(entities or {}),
             "request_id": request_id,
         }
+
+    def _record_trace(
+        self,
+        event_type: TraceEventType,
+        *,
+        request_id: str | None,
+        conversation_id: str | None,
+        data: dict[str, object],
+    ) -> None:
+        """Write an Agent event when this instance has a Harness tracer."""
+
+        if self.harness:
+            self.harness.record_trace(
+                event_type,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                agent_name=self.name,
+                data=data,
+            )
 
     async def _run_tool_loop(
         self,
@@ -402,6 +458,7 @@ class CustomerServiceAgent:
         intent: str | None,
         entities: dict[str, object] | None,
         request_id: str | None,
+        conversation_id: str | None,
     ) -> str:
         """Let the model request scoped Tools until it returns a final answer."""
 
@@ -409,6 +466,7 @@ class CustomerServiceAgent:
         messages.append({"role": "user", "content": user_message})
         tool_context = self._tool_context(
             state=state,
+            conversation_id=conversation_id,
             intent=intent,
             entities=entities,
             request_id=request_id,

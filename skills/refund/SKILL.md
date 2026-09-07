@@ -1,3 +1,11 @@
+---
+name: refund
+description: Handle refunds, payment timing, and refund eligibility safely.
+keywords: refund, reimbursement, payment, chargeback, repayment
+agents: billing, general
+enabled: true
+---
+
 # Refund Handling Skill
 
 ## Purpose

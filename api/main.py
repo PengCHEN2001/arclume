@@ -1,6 +1,7 @@
 """Arclume's HTTP entry point for the multi-Agent customer-service flow."""
 
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 import os
 from typing import AsyncIterator
@@ -14,8 +15,9 @@ from agents.general_agent import GeneralAgent
 from agents.technical_agent import TechnicalAgent
 from core.intent_recognizer import IntentRecognizer
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
-from core.skill_loader import SkillLoader
+from core.skill_loader import SkillError, SkillLoader
 from harness.runtime import HarnessRuntime
+from harness.trace import TraceRecorder
 from knowledge import KnowledgeBaseError
 from knowledge.knowledge_base import KnowledgeBase
 from memory import MemoryStoreError
@@ -77,7 +79,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except KnowledgeBaseError as exc:
         logger.warning("Hybrid lexical index is not ready; dense retrieval may continue: %s", exc)
     app.state.tool_executor = app.state.tool_manager
-    app.state.harness = HarnessRuntime(executor=app.state.tool_executor)
+    try:
+        trace_limit = max(100, int(os.getenv("ARCLUME_TRACE_MAX_EVENTS", "10000")))
+    except ValueError:
+        trace_limit = 10000
+    app.state.harness = HarnessRuntime(
+        executor=app.state.tool_executor,
+        tracer=TraceRecorder(max_events=trace_limit),
+    )
     common_agent_kwargs = {
         "llm": app.state.llm,
         "memory": app.state.memory,
@@ -221,6 +230,38 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         tools_used=result.tools_used,
         tool_traces=result.tool_traces,
     )
+
+
+@app.get("/skills")
+async def skills(request: Request) -> dict[str, object]:
+    """List loaded Skill metadata without exposing instruction content."""
+
+    try:
+        summary = await asyncio.to_thread(request.app.state.skill_loader.summary)
+    except SkillError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return summary
+
+
+@app.post("/skills/reload")
+async def reload_skills(request: Request) -> dict[str, object]:
+    """Clear the Skill cache so edited Markdown files are used immediately."""
+
+    names = await asyncio.to_thread(request.app.state.skill_loader.reload)
+    return {"reloaded": True, "skills": names}
+
+
+@app.get("/traces/{request_id}")
+async def trace(request_id: str, request: Request) -> dict[str, object]:
+    """Return the retained in-memory execution events for one request."""
+
+    events = request.app.state.harness.trace_events(request_id)
+    if not events:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    return {
+        "request_id": request_id,
+        "events": [event.model_dump(mode="json") for event in events],
+    }
 
 
 @app.get("/knowledge/search")

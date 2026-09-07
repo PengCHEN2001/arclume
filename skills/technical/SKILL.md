@@ -1,3 +1,11 @@
+---
+name: technical
+description: Diagnose login failures, error messages, crashes, and configuration issues.
+keywords: login, sign in, error, crash, bug, password, configuration, outage
+agents: technical
+enabled: true
+---
+
 # Technical Support Skill
 
 ## Purpose

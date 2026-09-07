@@ -15,6 +15,7 @@ from agents.escalation_agent import EscalationAgent
 from agents.response_composer import ResponseComposer
 from core.intent_recognizer import IntentCategory, IntentRecognizer, IntentResult, UrgencyLevel
 from core.llm_utils import LLMConfigurationError, LLMRequestError
+from harness.trace import TraceEventType
 
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,7 @@ class AgentOrchestrator:
         self.intent_recognizer = intent_recognizer or IntentRecognizer()
         self.confidence_threshold = confidence_threshold  # Clarification boundary
         self.response_composer = response_composer or ResponseComposer()
+        self.harness = general_agent.harness  # Shared request-level Trace recorder
         self.escalation_agent = escalation_agent or EscalationAgent(
             llm=general_agent.llm,
             memory=general_agent.memory,
@@ -168,8 +170,54 @@ class AgentOrchestrator:
 
         request_id = request_id or str(uuid4())
         started = time.monotonic()
-        analysis = await self.intent_recognizer.recognize(message, history=history)
+        self._record_trace(
+            TraceEventType.REQUEST_STARTED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={"message_length": len(message.strip())},
+        )
+        try:
+            analysis = await self.intent_recognizer.recognize(message, history=history)
+        except Exception as exc:
+            self._record_trace(
+                TraceEventType.REQUEST_FAILED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"stage": "intent_recognition", "error": str(exc)},
+            )
+            raise
+        self._record_trace(
+            TraceEventType.INTENT_RECOGNIZED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={
+                "intent": analysis.intent.value,
+                "intent_group": analysis.intent_group,
+                "confidence": analysis.confidence,
+                "urgency": analysis.urgency.value,
+                "should_use_rag": analysis.should_use_rag,
+                "entities": analysis.entities,
+            },
+        )
         if self._needs_clarification(analysis, message):
+            self._record_trace(
+                TraceEventType.ROUTE_SELECTED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"primary_agent": AgentType.GENERAL.value, "clarification": True},
+            )
+            self._record_trace(
+                TraceEventType.RESPONSE_COMPOSED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"agent_count": 0, "clarification": True},
+            )
+            self._record_trace(
+                TraceEventType.REQUEST_COMPLETED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"status": "clarification"},
+            )
             return OrchestratorResult(
                 request_id=request_id,
                 response=(
@@ -185,6 +233,18 @@ class AgentOrchestrator:
             )
 
         decision = self._make_decision(analysis)
+        self._record_trace(
+            TraceEventType.ROUTE_SELECTED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={
+                "primary_agent": decision.primary_agent.value,
+                "supporting_agents": [agent.value for agent in decision.supporting_agents],
+                "reason": decision.reason,
+                "confidence": decision.confidence,
+                "use_rag": decision.use_rag,
+            },
+        )
         if decision.supporting_agents:
             responses = await self._run_parallel(
                 message,
@@ -197,6 +257,12 @@ class AgentOrchestrator:
             )
             successful = [response for response in responses if response.success]
             if not successful:
+                self._record_trace(
+                    TraceEventType.REQUEST_FAILED,
+                    request_id=request_id,
+                    conversation_id=conversation_id,
+                    data={"stage": "parallel_agents", "error": "all agents failed"},
+                )
                 self._raise_if_model_error(responses)
                 response_text = "The support Agents were unable to complete this request."
             else:
@@ -208,6 +274,18 @@ class AgentOrchestrator:
                 UrgencyLevel.HIGH,
                 UrgencyLevel.CRITICAL,
             } or analysis.intent in self._ESCALATION_INTENTS
+            self._record_trace(
+                TraceEventType.RESPONSE_COMPOSED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"agent_count": len(successful), "parallel": True},
+            )
+            self._record_trace(
+                TraceEventType.REQUEST_COMPLETED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"status": "completed" if successful else "failed"},
+            )
             return OrchestratorResult(
                 request_id=request_id,
                 response=response_text,
@@ -247,6 +325,12 @@ class AgentOrchestrator:
                 persist=False,
             )
         if not response.success:
+            self._record_trace(
+                TraceEventType.REQUEST_FAILED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"stage": "agent_execution", "error": response.error and str(response.error)},
+            )
             self._raise_if_model_error([response])
             response_text = "The support Agent was unable to complete this request."
         else:
@@ -256,6 +340,18 @@ class AgentOrchestrator:
             UrgencyLevel.HIGH,
             UrgencyLevel.CRITICAL,
         } or analysis.intent in self._ESCALATION_INTENTS
+        self._record_trace(
+            TraceEventType.RESPONSE_COMPOSED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={"agent_count": 1, "parallel": False, "success": response.success},
+        )
+        self._record_trace(
+            TraceEventType.REQUEST_COMPLETED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={"status": "completed" if response.success else "failed"},
+        )
         return OrchestratorResult(
             request_id=request_id,
             response=response_text,
@@ -315,6 +411,13 @@ class AgentOrchestrator:
 
         agent, stats = self._best_agent(agent_type)
         if agent is None or stats is None:
+            self._record_trace(
+                TraceEventType.AGENT_COMPLETED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                agent_name=agent_type.value,
+                data={"success": False, "reason": "agent_not_configured"},
+            )
             return AgentResponse(
                 agent_type=AgentType.GENERAL,
                 content="No available Agent is configured.",
@@ -323,6 +426,13 @@ class AgentOrchestrator:
 
         started = time.monotonic()
         stats.total += 1
+        self._record_trace(
+            TraceEventType.AGENT_STARTED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            agent_name=agent_type.value,
+            data={"persist": persist},
+        )
         try:
             content = await agent.respond(
                 message,
@@ -348,6 +458,13 @@ class AgentOrchestrator:
         except Exception as exc:
             elapsed = (time.monotonic() - started) * 1000
             stats.total_ms += elapsed
+            self._record_trace(
+                TraceEventType.AGENT_COMPLETED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                agent_name=agent_type.value,
+                data={"success": False, "latency_ms": elapsed, "error": str(exc)},
+            )
             logger.exception("Agent %s failed", agent_type.value)
             return AgentResponse(
                 agent_type=agent_type,
@@ -360,6 +477,17 @@ class AgentOrchestrator:
         elapsed = (time.monotonic() - started) * 1000
         stats.success += 1
         stats.total_ms += elapsed
+        self._record_trace(
+            TraceEventType.AGENT_COMPLETED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            agent_name=agent_type.value,
+            data={
+                "success": True,
+                "latency_ms": elapsed,
+                "tools_used": list(agent.last_tools_used),
+            },
+        )
         return AgentResponse(
             agent_type=agent_type,
             content=content,
@@ -501,3 +629,23 @@ class AgentOrchestrator:
         """Return the currently registered executable Agent types."""
 
         return list(self._pool)
+
+    def _record_trace(
+        self,
+        event_type: TraceEventType,
+        *,
+        request_id: str,
+        conversation_id: str,
+        agent_name: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Write an orchestration event when the shared Harness is available."""
+
+        if self.harness:
+            self.harness.record_trace(
+                event_type,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                agent_name=agent_name,
+                data=data,
+            )
