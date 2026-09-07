@@ -16,6 +16,7 @@ from typing import Any
 from core.llm_utils import LLMClient
 from harness.executor import ToolDefinition, ToolExecutor
 from knowledge import KnowledgeBaseError
+from knowledge.hybrid_retriever import HybridRetriever
 from knowledge.knowledge_base import KnowledgeBase
 from schemas.tool import ToolCall, ToolResult
 
@@ -99,6 +100,7 @@ class ToolManager(ToolExecutor):
         llm: LLMClient | None = None,
         knowledge_base: KnowledgeBase | None = None,
         cache_cleanup_interval_seconds: float = 60.0,
+        hybrid_retriever: HybridRetriever | None = None,
     ) -> None:
         super().__init__()
         self.llm = llm                              # Optional rewrite/rerank client
@@ -108,6 +110,13 @@ class ToolManager(ToolExecutor):
         self.rewrite_count = self._env_int("ARCLUME_RAG_REWRITE_COUNT", 3, minimum=1, maximum=5)
         self.max_candidate_results = self._env_int(
             "ARCLUME_RAG_MAX_CANDIDATES", 30, minimum=1, maximum=100
+        )
+        self.bm25_enabled = self._env_bool("ARCLUME_RAG_BM25_ENABLED", True)
+        self.rrf_k = self._env_int("ARCLUME_RAG_RRF_K", 60, minimum=1, maximum=200)
+        self.hybrid_retriever = hybrid_retriever or (
+            HybridRetriever(knowledge_base, rrf_k=self.rrf_k)
+            if knowledge_base is not None
+            else None
         )
         self._cache: dict[str, tuple[float, ToolResult]] = {}
         self._stats: dict[str, ToolStats] = {}
@@ -119,6 +128,18 @@ class ToolManager(ToolExecutor):
         super().register(tool)
         self._stats.setdefault(tool.name, ToolStats())
         self._breakers.setdefault(tool.name, CircuitBreaker())
+
+    async def initialize_async(self) -> None:
+        """Load the BM25 corpus from the current ChromaDB collection."""
+
+        if self.hybrid_retriever is not None:
+            await self.hybrid_retriever.initialize_async()
+
+    async def refresh_hybrid_index(self) -> None:
+        """Refresh BM25 after knowledge documents are added or replaced."""
+
+        if self.hybrid_retriever is not None:
+            await self.hybrid_retriever.refresh_async()
 
     async def execute(
         self,
@@ -268,18 +289,31 @@ class ToolManager(ToolExecutor):
             self.max_candidate_results,
             max(safe_top_k * 2, 6),
         )
+        if self.hybrid_retriever is None:
+            raise KnowledgeBaseError("Hybrid retriever is not configured")
+
         tasks = [
-            self.knowledge_base.search_async(subquery, top_k=candidate_k)
+            self.hybrid_retriever.search_async(
+                subquery,
+                top_k=candidate_k,
+                use_bm25=self.bm25_enabled,
+            )
             for subquery in queries
         ]
         recalled = await asyncio.gather(*tasks, return_exceptions=True)
         successful_results: list[list[dict[str, Any]]] = []
         errors: list[Exception] = []
+        dense_count = 0
+        bm25_count = 0
+        hybrid_degraded = False
         for result in recalled:
             if isinstance(result, Exception):
                 errors.append(result)
             else:
-                successful_results.append(result)
+                successful_results.append(result.results)
+                dense_count += len(result.dense_results)
+                bm25_count += len(result.bm25_results)
+                hybrid_degraded = hybrid_degraded or result.degraded
         if not successful_results:
             if errors:
                 raise KnowledgeBaseError("All knowledge retrieval branches failed") from errors[0]
@@ -293,7 +327,12 @@ class ToolManager(ToolExecutor):
             "results": reranked,
             "reranked": bool(reranked),
             "rerank_method": rerank_method,
-            "degraded": bool(errors),
+            "retrieval_mode": "hybrid" if self.bm25_enabled else "dense",
+            "fusion_method": "rrf" if self.bm25_enabled else "none",
+            "dense_count": dense_count,
+            "bm25_count": bm25_count,
+            "fused_count": len(merged),
+            "degraded": bool(errors) or hybrid_degraded,
         }
 
     async def rewrite_query(self, query: str) -> list[str]:
@@ -389,7 +428,9 @@ class ToolManager(ToolExecutor):
         for branch in branches:
             for item in branch:
                 content = str(item.get("content", ""))
-                key = str(item.get("source") or "") + ":" + str(item.get("chunk", ""))
+                key = str(item.get("chunk_id") or "")
+                if not key:
+                    key = str(item.get("source") or "") + ":" + str(item.get("chunk", ""))
                 if key.endswith(":"):
                     key = hashlib.sha256(content.encode("utf-8")).hexdigest()
                 score = float(item.get("score") or 0.0)
@@ -399,16 +440,16 @@ class ToolManager(ToolExecutor):
 
     @classmethod
     def _local_rerank(cls, query: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Combine vector similarity and lexical overlap for a cheap local rerank."""
+        """Combine the fused retrieval score and lexical overlap for a cheap rerank."""
 
         query_tokens = cls._tokens(query)
         reranked: list[dict[str, Any]] = []
         for item in items:
             content_tokens = cls._tokens(str(item.get("content", "")))
             overlap = len(query_tokens & content_tokens) / max(1, len(query_tokens))
-            vector_score = max(0.0, min(1.0, float(item.get("score") or 0.0)))
+            base_score = max(0.0, min(1.0, float(item.get("score") or 0.0)))
             copied = dict(item)
-            copied["score"] = round(0.7 * vector_score + 0.3 * overlap, 4)
+            copied["score"] = round(0.7 * base_score + 0.3 * overlap, 4)
             reranked.append(copied)
         return sorted(reranked, key=lambda item: float(item.get("score") or 0.0), reverse=True)
 

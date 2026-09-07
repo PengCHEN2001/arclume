@@ -5,8 +5,8 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The twelfth stage adds layered conversation memory on top of the governed RAG
-and structured multi-Agent runtime:
+The thirteenth stage adds real Hybrid RAG on top of the layered Memory,
+governed Tool execution, and structured multi-Agent runtime:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -44,6 +44,10 @@ and structured multi-Agent runtime:
   Redis/ChromaDB failure boundary without external services.
 - `knowledge/knowledge_base.py` indexes document chunks in ChromaDB and returns
   semantic search results for one request.
+- `knowledge/bm25_index.py` builds a dependency-free lexical index over the same
+  knowledge chunks.
+- `knowledge/hybrid_retriever.py` runs dense and BM25 recall in parallel and
+  combines their ranked results with Reciprocal Rank Fusion.
 - `data/demo_docs/` contains small English policy documents for local RAG tests.
 - `core/skill_loader.py` loads human-authored Markdown Skill instructions without
   allowing the Agent to modify them.
@@ -51,8 +55,8 @@ and structured multi-Agent runtime:
 - `tools/tool_functions.py` contains the current Tool functions and registers
   them in the shared Harness Executor.
 - `tools/tool_manager.py` coordinates query rewriting, parallel recall,
-  deduplication, reranking, TTL caching, circuit breaking, fallback, and Tool
-  statistics.
+  BM25 and dense retrieval, RRF fusion, deduplication, reranking, TTL caching,
+  circuit breaking, fallback, and Tool statistics.
 - `core/llm_utils.py` can parse OpenAI-compatible function calls, while the
   Harness remains responsible for Tool authorization and execution.
 - The `/chat` endpoint now runs intent recognition and orchestration before the
@@ -60,8 +64,8 @@ and structured multi-Agent runtime:
   explicit human handoff requests, and is enabled for business intents.
 - The selected Agent receives only the Skill relevant to the detected domain.
 - The knowledge retrieval path now passes through the low-risk Harness Tool
-  boundary and supports bounded query variants, parallel recall, deduplication,
-  and local or optional model reranking.
+  boundary and supports bounded query variants, parallel dense and BM25 recall,
+  RRF fusion, deduplication, and local or optional model reranking.
 - `/knowledge/search`, `/knowledge/stats`, and `/tools/stats` provide model-free
   retrieval and reliability checks.
 - Order and logistics Tools currently return deterministic mock data. Ticket
@@ -124,7 +128,9 @@ AgentState. ChromaDB stores the knowledge base, episodic summaries, and user
 profiles in separate collections. Memory compression uses a local factual
 fallback by default; set `ARCLUME_MEMORY_LLM_ENABLED=true` only when the extra
 summary and profile-extraction model calls are desired. The application can
-continue with Redis-only memory while ChromaDB is unavailable. Redis is a core
+continue with Redis-only memory while ChromaDB is unavailable. RAG uses both a
+ChromaDB dense branch and an in-process BM25 branch by default; set
+`ARCLUME_RAG_BM25_ENABLED=false` to compare dense-only retrieval. Redis is a core
 chat dependency: if its working-memory read or write fails, `/chat` returns
 `503` instead of silently pretending that no history exists.
 

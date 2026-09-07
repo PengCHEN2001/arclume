@@ -40,6 +40,7 @@ class KnowledgeBase:
         self._client = client                       # Injected or lazily created client
         self._collection = collection               # Injected or lazily opened collection
         self._mode: str | None = "injected" if collection is not None else None
+        self._revision = 0                          # Changes since the dense corpus was loaded
 
     @classmethod
     def from_environment(cls) -> "KnowledgeBase":
@@ -100,6 +101,7 @@ class KnowledgeBase:
 
         # Upsert makes re-indexing safe when the same source is loaded again.
         collection.upsert(ids=ids, documents=texts, metadatas=metadata)
+        self._revision += 1
         logger.info("Indexed %s knowledge chunks", len(ids))
         return len(ids)
 
@@ -149,14 +151,18 @@ class KnowledgeBase:
         documents = results.get("documents") or [[]]
         metadatas = results.get("metadatas") or [[]]
         distances = results.get("distances") or [[]]
+        ids = results.get("ids") or [[]]
+        first_ids = ids[0] if ids and isinstance(ids[0], list) else ids
         items: list[dict[str, Any]] = []
 
         for index, document in enumerate(documents[0] or []):
             metadata = (metadatas[0] or [{}])[index] or {}
             distance = (distances[0] or [None])[index]
+            chunk_id = first_ids[index] if index < len(first_ids) else None
             score = None if distance is None else max(0.0, min(1.0, 1.0 - float(distance)))
             items.append(
                 {
+                    "chunk_id": chunk_id,
                     "title": metadata.get("title", ""),
                     "source": metadata.get("source", ""),
                     "content": document,
@@ -165,6 +171,48 @@ class KnowledgeBase:
                 }
             )
         return items
+
+    def get_indexed_chunks(self) -> list[dict[str, Any]]:
+        """Return the complete chunk corpus used to build the BM25 index."""
+
+        collection = self._ensure_collection()
+        try:
+            raw = collection.get(include=["documents", "metadatas"])
+        except Exception as exc:
+            raise KnowledgeBaseError("Failed to load indexed knowledge chunks") from exc
+
+        documents = raw.get("documents") or []
+        metadatas = raw.get("metadatas") or []
+        ids = raw.get("ids") or []
+        chunks: list[dict[str, Any]] = []
+        for index, content in enumerate(documents):
+            if not isinstance(content, str) or not content.strip():
+                continue
+            metadata = metadatas[index] if index < len(metadatas) else {}
+            metadata = metadata if isinstance(metadata, dict) else {}
+            chunk_id = ids[index] if index < len(ids) else None
+            if not chunk_id:
+                chunk_id = self._chunk_id(
+                    str(metadata.get("source", "")),
+                    int(metadata.get("chunk_index", 0)),
+                    content,
+                )
+            chunks.append(
+                {
+                    "chunk_id": chunk_id,
+                    "title": metadata.get("title", ""),
+                    "source": metadata.get("source", ""),
+                    "content": content,
+                    "chunk": metadata.get("chunk_index", 0),
+                    "total_chunks": metadata.get("total_chunks", 1),
+                }
+            )
+        return chunks
+
+    async def get_indexed_chunks_async(self) -> list[dict[str, Any]]:
+        """Load the complete chunk corpus without blocking the event loop."""
+
+        return await asyncio.to_thread(self.get_indexed_chunks)
 
     async def search_async(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Run synchronous ChromaDB retrieval outside the event loop."""
@@ -187,6 +235,12 @@ class KnowledgeBase:
         """Expose whether the backend uses the server or local mode."""
 
         return self._mode
+
+    @property
+    def revision(self) -> int:
+        """Expose the local corpus revision for dependent lexical indexes."""
+
+        return self._revision
 
     def _initialize(self) -> None:
         """Open the collection and load demo documents only when it is empty."""

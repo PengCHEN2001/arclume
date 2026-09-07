@@ -72,6 +72,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             knowledge_base=app.state.knowledge_base,
         )
     )
+    try:
+        await app.state.tool_manager.initialize_async()
+    except KnowledgeBaseError as exc:
+        logger.warning("Hybrid lexical index is not ready; dense retrieval may continue: %s", exc)
     app.state.tool_executor = app.state.tool_manager
     app.state.harness = HarnessRuntime(executor=app.state.tool_executor)
     common_agent_kwargs = {
@@ -154,6 +158,12 @@ async def health(request: Request) -> dict[str, object]:
         "tools": [tool.name for tool in request.app.state.tool_executor.list_tools()],
         "tool_stats": request.app.state.harness.tool_stats(),
         "rag_llm_enabled": request.app.state.tool_manager.rag_llm_enabled,
+        "rag_bm25_enabled": request.app.state.tool_manager.bm25_enabled,
+        "rag_bm25_documents": (
+            request.app.state.tool_manager.hybrid_retriever.document_count
+            if request.app.state.tool_manager.hybrid_retriever is not None
+            else 0
+        ),
         "agents": [
             agent_type.value
             for agent_type in request.app.state.orchestrator.list_agents()
@@ -250,6 +260,11 @@ async def knowledge_search(
         "results": data.get("results", []),
         "reranked": result.reranked or bool(data.get("reranked")),
         "rerank_method": data.get("rerank_method", "none"),
+        "retrieval_mode": data.get("retrieval_mode", "dense"),
+        "fusion_method": data.get("fusion_method", "none"),
+        "dense_count": data.get("dense_count", 0),
+        "bm25_count": data.get("bm25_count", 0),
+        "fused_count": data.get("fused_count", 0),
         "cached": result.cached,
         "fallback_used": result.fallback_used,
         "degraded": bool(data.get("degraded")) or result.fallback_used,
