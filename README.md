@@ -5,9 +5,10 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The fifteenth stage adds online Monitor capabilities on top of metadata-driven
-Skills, complete request tracing, Hybrid RAG, layered Memory, governed Tool
-execution, and the structured multi-Agent runtime:
+The seventeenth stage closes the backend integration surface on top of
+metadata-driven Skills, complete request tracing, Hybrid RAG, layered Memory,
+governed Tool execution, monitoring, Evaluation, and the structured
+multi-Agent runtime:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -29,7 +30,8 @@ execution, and the structured multi-Agent runtime:
 - `core/intent_recognizer.py` produces fine-grained intent, entities, urgency,
   confidence, domain scores, and the RAG decision. Local recognition is the
   default; an optional refinement LLM call is controlled by
-  `ARCLUME_INTENT_LLM_ENABLED`.
+  `ARCLUME_INTENT_LLM_ENABLED`. Human-corrected examples can be added through
+  `IntentRecognizer.learn()` without changing the main request path.
 - `agents/agent_orchestrator.py` selects the primary Agent, can run a technical
   and billing Agent in parallel for compound requests, handles clarification,
   records per-Agent performance, accepts Monitor routing penalties, exposes
@@ -75,9 +77,12 @@ execution, and the structured multi-Agent runtime:
   boundary and supports bounded query variants, parallel dense and BM25 recall,
   RRF fusion, deduplication, and local or optional model reranking.
 - `/knowledge/search`, `/knowledge/stats`, and `/tools/stats` provide model-free
-  retrieval and reliability checks.
+  retrieval and reliability checks. `POST /search` is an equivalent retrieval
+  entry point, while `POST /knowledge/add` and `POST /knowledge/upload` provide
+  small-batch document ingestion and refresh the lexical index.
 - `/skills` lists Skill metadata and `/skills/reload` reloads edited Skill files.
 - `/traces/{request_id}` exposes the retained request-level execution trace.
+- `/trace/tool/{request_id}` and `/trace/tools` expose Tool-focused trace views.
 - `/monitor` exposes Agent/Tool health, active alerts, and suggestions.
 - `/metrics` exposes Prometheus-compatible metrics without requiring a model call.
 - `evaluation/` provides dependency-free Intent, routing, and retrieval metrics,
@@ -92,6 +97,8 @@ execution, and the structured multi-Agent runtime:
   supports compatible function calling; otherwise the text path remains active.
 - Evaluation does not modify the live system. Automatic Skill generation,
   modification, publication, and rollback remain intentionally disabled.
+- CORS is configurable through `ARCLUME_CORS_ORIGINS`; the development default
+  is permissive and should be restricted before production deployment.
 
 ## Python environment
 
@@ -127,7 +134,12 @@ Useful endpoints:
 - `GET /health` — process and configuration status.
 - `POST /chat` — single-Agent customer-service request with Redis persistence.
 - `GET /knowledge/search` — semantic search without calling the model.
+- `POST /search` — retrieval pipeline entry point with query parameters.
+- `POST /knowledge/add` — add a batch of Markdown-like text documents as JSON.
+- `POST /knowledge/upload` — upload one `.md`, `.txt`, or `.json` knowledge file.
 - `GET /knowledge/stats` — indexed knowledge chunk count.
+- `GET /trace/tool/{request_id}` — Tool events for one request.
+- `GET /trace/tools` — recent requests that emitted Tool events.
 - `GET /monitor` — Agent/Tool health, alerts, and operational suggestions.
 - `GET /metrics` — Prometheus-compatible runtime metrics.
 - `GET /docs` — interactive API documentation.
@@ -143,6 +155,9 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f api
 ```
+
+The compose stack also includes Prometheus on port 9090 and Nginx on port 80.
+They are not required for local Python development.
 
 The current application uses Redis for working memory, session summaries, and
 AgentState. ChromaDB stores the knowledge base, episodic summaries, and user

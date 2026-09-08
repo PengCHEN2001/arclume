@@ -86,6 +86,47 @@ class HarnessRuntime:
 
         return self.tracer.events(request_id)
 
+    def tool_trace(self, request_id: str) -> dict[str, Any] | None:
+        """Return one request trace in a tool-focused, API-friendly shape."""
+
+        events = self.trace_events(request_id)
+        if not events:
+            return None
+        tool_events = [
+            event
+            for event in events
+            if event.tool_name
+            and event.event_type
+            in {
+                TraceEventType.DECISION_RECEIVED,
+                TraceEventType.POLICY_EVALUATED,
+                TraceEventType.TOOL_EXECUTION_FINISHED,
+            }
+        ]
+        return {
+            "request_id": request_id,
+            "events": [event.model_dump(mode="json") for event in events],
+            "tool_events": [event.model_dump(mode="json") for event in tool_events],
+        }
+
+    def recent_tool_traces(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent requests that emitted at least one Tool event."""
+
+        safe_limit = max(1, min(int(limit), 100))
+        request_ids: list[str] = []
+        for event in reversed(self.tracer.events()):
+            if not event.request_id or not event.tool_name:
+                continue
+            if event.request_id not in request_ids:
+                request_ids.append(event.request_id)
+            if len(request_ids) >= safe_limit:
+                break
+        return [
+            trace
+            for request_id in request_ids
+            if (trace := self.tool_trace(request_id)) is not None
+        ]
+
     async def handle_tool_call(
         self,
         call: ToolCall,

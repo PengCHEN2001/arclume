@@ -60,6 +60,28 @@ class HarnessTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[0].conversation_id, "conversation-1")
         self.assertEqual(events[0].agent_name, "general")
 
+    async def test_tool_trace_views_group_tool_events_by_request(self) -> None:
+        recorder = TraceRecorder()
+        runtime = HarnessRuntime(tracer=recorder)
+        recorder.record(
+            TraceEventType.DECISION_RECEIVED,
+            request_id="request-1",
+            tool_name="knowledge_search",
+        )
+        recorder.record(
+            TraceEventType.TOOL_EXECUTION_FINISHED,
+            request_id="request-1",
+            tool_name="knowledge_search",
+            data={"success": True},
+        )
+
+        trace = runtime.tool_trace("request-1")
+
+        self.assertIsNotNone(trace)
+        assert trace is not None
+        self.assertEqual(len(trace["tool_events"]), 2)
+        self.assertEqual(len(runtime.recent_tool_traces()), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

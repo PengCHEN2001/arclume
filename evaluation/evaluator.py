@@ -50,6 +50,58 @@ class QualityScores:
         )
 
 
+class IntentEvaluator:
+    """Evaluate Intent recognition independently from the full dialog flow."""
+
+    def __init__(self, recognizer: Any) -> None:
+        self.recognizer = recognizer  # Object exposing async recognize(message)
+
+    async def evaluate(self, cases: Iterable[IntentTestCase]) -> dict[str, Any]:
+        """Return accuracy, Macro-F1, and per-case details for labeled examples."""
+
+        examples = list(cases)
+        expected: list[str] = []
+        predicted: list[str] = []
+        details: list[dict[str, Any]] = []
+        for case in examples:
+            expected.append(case.expected_intent)
+            try:
+                result = await self.recognizer.recognize(case.message)
+                raw_intent = getattr(result, "intent", result)
+                label = getattr(raw_intent, "value", raw_intent)
+                predicted_label = str(label)
+                details.append(
+                    {
+                        "message": case.message,
+                        "expected": case.expected_intent,
+                        "predicted": predicted_label,
+                        "confidence": getattr(result, "confidence", None),
+                        "reasoning": getattr(result, "reasoning", ""),
+                    }
+                )
+            except Exception as exc:
+                predicted_label = "__error__"
+                details.append(
+                    {
+                        "message": case.message,
+                        "expected": case.expected_intent,
+                        "predicted": predicted_label,
+                        "error": str(exc),
+                    }
+                )
+            predicted.append(predicted_label)
+
+        metrics = classification_details(expected, predicted)
+        return {
+            "total": len(examples),
+            "correct": sum(left == right for left, right in zip(expected, predicted)),
+            "accuracy": metrics["accuracy"],
+            "macro_f1": metrics["macro_f1"],
+            "per_class": metrics["per_class"],
+            "cases": details,
+        }
+
+
 @dataclass
 class EvalResult:
     """One Intent or dialog evaluation result."""

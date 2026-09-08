@@ -2,13 +2,16 @@
 
 from contextlib import asynccontextmanager
 import asyncio
+import json
 import logging
 import os
 from typing import AsyncIterator
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import File, FastAPI, HTTPException, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 from agents.agent_orchestrator import AgentOrchestrator
 from agents.billing_agent import BillingAgent
 from agents.general_agent import GeneralAgent
@@ -35,6 +38,8 @@ from schemas.api import (
     ChatRequest,
     ChatResponse,
     EvalRunInput,
+    KnowledgeBatchInput,
+    KnowledgeDocumentInput,
 )
 from schemas.tool import ToolCall
 from tools.tool_manager import ToolManager
@@ -178,6 +183,22 @@ app = FastAPI(
 )
 
 
+def _cors_origins() -> list[str]:
+    """Read the development CORS policy from one comma-separated setting."""
+
+    raw = os.getenv("ARCLUME_CORS_ORIGINS", "*")
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    return origins or ["*"]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @app.get("/health")
 async def health(request: Request) -> dict[str, object]:
     """Return a lightweight readiness report.
@@ -316,6 +337,30 @@ async def trace(request_id: str, request: Request) -> dict[str, object]:
     }
 
 
+@app.get("/trace/tool/{request_id}")
+async def tool_trace(request_id: str, request: Request) -> dict[str, object]:
+    """Return the Tool-focused trace for one completed request."""
+
+    trace_data = request.app.state.harness.tool_trace(request_id)
+    return {
+        "request_id": request_id,
+        "found": trace_data is not None,
+        "trace": trace_data or {},
+    }
+
+
+@app.get("/trace/tools")
+async def recent_tool_traces(
+    request: Request,
+    limit: int = 20,
+) -> dict[str, object]:
+    """Return Tool traces for the most recent requests."""
+
+    return {
+        "items": request.app.state.harness.recent_tool_traces(limit),
+    }
+
+
 @app.get("/monitor")
 async def monitor_summary(request: Request) -> dict[str, object]:
     """Return Agent/Tool health, active alerts, and optimization suggestions."""
@@ -331,8 +376,7 @@ async def prometheus_metrics(request: Request) -> Response:
     return Response(content=body, media_type=media_type)
 
 
-@app.get("/knowledge/search")
-async def knowledge_search(
+async def _search_knowledge(
     query: str,
     request: Request,
     top_k: int = 5,
@@ -376,6 +420,133 @@ async def knowledge_search(
         "cached": result.cached,
         "fallback_used": result.fallback_used,
         "degraded": bool(data.get("degraded")) or result.fallback_used,
+    }
+
+
+@app.get("/knowledge/search")
+async def knowledge_search(
+    query: str,
+    request: Request,
+    top_k: int = 5,
+) -> dict[str, object]:
+    """Search the knowledge base without calling the model."""
+
+    return await _search_knowledge(query, request, top_k)
+
+
+@app.post("/search")
+async def search_knowledge(
+    query: str,
+    request: Request,
+    top_k: int = 5,
+) -> dict[str, object]:
+    """Compatibility entry point for the complete retrieval pipeline."""
+
+    return await _search_knowledge(query, request, top_k)
+
+
+def _document_payload(document: KnowledgeDocumentInput) -> dict[str, str]:
+    """Convert a validated transport model into the KnowledgeBase payload."""
+
+    payload = {
+        "title": document.title.strip(),
+        "content": document.content.strip(),
+    }
+    if document.source and document.source.strip():
+        payload["source"] = document.source.strip()
+    return payload
+
+
+async def _refresh_knowledge_index(request: Request) -> bool:
+    """Refresh BM25 after ingestion while allowing dense retrieval to degrade safely."""
+
+    try:
+        await request.app.state.tool_manager.refresh_hybrid_index()
+        return True
+    except Exception as exc:
+        logger.warning("Hybrid index refresh failed after ingestion: %s", exc)
+        return False
+
+
+@app.post("/knowledge/add")
+async def add_knowledge(
+    body: KnowledgeBatchInput,
+    request: Request,
+) -> dict[str, object]:
+    """Add validated documents, chunk them, and refresh the lexical index."""
+
+    knowledge_base: KnowledgeBase = request.app.state.knowledge_base
+    try:
+        added_chunks = await knowledge_base.add_documents_async(
+            [_document_payload(document) for document in body.documents]
+        )
+        total_chunks = await knowledge_base.doc_count_async()
+    except (KnowledgeBaseError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {
+        "message": f"Indexed {added_chunks} document chunks",
+        "added_chunks": added_chunks,
+        "total_chunks": total_chunks,
+        "hybrid_index_refreshed": await _refresh_knowledge_index(request),
+    }
+
+
+@app.post("/knowledge/upload")
+async def upload_knowledge(
+    request: Request,
+    file: UploadFile = File(...),
+) -> dict[str, object]:
+    """Upload one Markdown, text, or JSON knowledge file up to 10 MB."""
+
+    knowledge_base: KnowledgeBase = request.app.state.knowledge_base
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File size exceeds the 10 MB limit")
+
+    filename = file.filename or "uploaded_document"
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if suffix not in {"md", "txt", "json"}:
+        raise HTTPException(status_code=415, detail="Only .md, .txt, and .json files are supported")
+
+    text = content.decode("utf-8", errors="ignore")
+    documents: list[dict[str, str]] = []
+    if suffix == "json":
+        try:
+            raw_documents = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}") from exc
+        if not isinstance(raw_documents, list):
+            raise HTTPException(
+                status_code=400,
+                detail="JSON uploads must be an array of {title, content} objects",
+            )
+        try:
+            documents = [
+                _document_payload(KnowledgeDocumentInput.model_validate(item))
+                for item in raw_documents
+            ]
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    else:
+        title = filename.rsplit(".", 1)[0] or filename
+        documents = [{"title": title, "content": text, "source": filename}]
+
+    if not documents:
+        raise HTTPException(status_code=422, detail="The uploaded file contains no documents")
+
+    try:
+        added_chunks = await knowledge_base.add_documents_async(documents)
+        total_chunks = await knowledge_base.doc_count_async()
+    except (KnowledgeBaseError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {
+        "message": f"Indexed {added_chunks} chunks from {filename}",
+        "filename": filename,
+        "added_chunks": added_chunks,
+        "total_chunks": total_chunks,
+        "hybrid_index_refreshed": await _refresh_knowledge_index(request),
     }
 
 

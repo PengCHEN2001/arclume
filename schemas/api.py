@@ -41,6 +41,23 @@ class ChatResponse(BaseModel):
     tool_traces: list[dict[str, object]] = Field(default_factory=list)
 
 
+class KnowledgeDocumentInput(BaseModel):
+    """One document accepted by the knowledge ingestion endpoint."""
+
+    title: str = Field(min_length=1, description="Human-readable document title")
+    content: str = Field(min_length=1, description="Document text to index")
+    source: str | None = Field(
+        default=None,
+        description="Optional stable source label used in retrieval metadata",
+    )
+
+
+class KnowledgeBatchInput(BaseModel):
+    """Batch of documents accepted by ``POST /knowledge/add``."""
+
+    documents: list[KnowledgeDocumentInput] = Field(min_length=1)
+
+
 class EvalIntentCaseInput(BaseModel):
     """One optional custom Intent case for the Evaluation endpoint."""
 

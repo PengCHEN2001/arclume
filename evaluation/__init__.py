@@ -7,6 +7,7 @@ from evaluation.evaluator import (
     EndToEndEvaluator,
     EvalReport,
     EvalResult,
+    IntentEvaluator,
     IntentTestCase,
     QualityScores,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "LLMJudge",
     "JudgeError",
     "EndToEndEvaluator",
+    "IntentEvaluator",
     "EvalReport",
     "EvalResult",
     "IntentTestCase",

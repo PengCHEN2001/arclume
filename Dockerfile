@@ -28,6 +28,8 @@ COPY schemas ./schemas
 COPY data ./data
 COPY skills ./skills
 COPY tools ./tools
+COPY monitor ./monitor
+COPY evaluation ./evaluation
 
 EXPOSE 8000
 

@@ -14,7 +14,7 @@ from evaluation.metrics import (
 from evaluation.models import EvaluationReport, IntentCase, RetrievalCase
 from evaluation.regression import compare_reports
 from evaluation.runner import evaluate_intent_cases, evaluate_retrieval_cases
-from evaluation.evaluator import EndToEndEvaluator, IntentTestCase
+from evaluation.evaluator import EndToEndEvaluator, IntentEvaluator, IntentTestCase
 
 
 class EvaluationMetricTests(unittest.TestCase):
@@ -163,6 +163,23 @@ class EndToEndEvaluatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.pass_rate, 1.0)
         self.assertEqual(report.avg_scores["intent_accuracy"], 1.0)
         self.assertEqual(report.avg_scores["accuracy"], 1.0)
+
+    async def test_intent_evaluator_is_available_as_a_standalone_component(self) -> None:
+        from types import SimpleNamespace
+
+        class FakeRecognizer:
+            async def recognize(self, message: str) -> SimpleNamespace:
+                return SimpleNamespace(intent="refund" if "refund" in message else "technical")
+
+        report = await IntentEvaluator(FakeRecognizer()).evaluate(
+            [
+                IntentTestCase("refund please", "refund"),
+                IntentTestCase("the app crashed", "technical"),
+            ]
+        )
+
+        self.assertEqual(report["accuracy"], 1.0)
+        self.assertEqual(report["correct"], 2)
 
 
 if __name__ == "__main__":

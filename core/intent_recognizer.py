@@ -240,6 +240,11 @@ class IntentRecognizer:
         self.confidence_threshold = confidence_threshold  # Clarification boundary
         self.cache_size = cache_size           # Maximum in-process result cache
         self._cache: dict[str, IntentResult] = {}
+        self._learned_templates: dict[IntentCategory, list[str]] = {
+            intent: list(examples) for intent, examples in _TEMPLATES.items()
+        }  # Human-corrected examples used by local similarity matching
+        self.cache_hits = 0                    # Cache hits since process start
+        self.cache_misses = 0                  # Cache misses since process start
 
     async def recognize(
         self,
@@ -254,7 +259,9 @@ class IntentRecognizer:
 
         cache_key = self._cache_key(cleaned, history)
         if cache_key in self._cache:
+            self.cache_hits += 1
             return self._cache[cache_key]
+        self.cache_misses += 1
 
         started = time.monotonic()
         pattern_scores = self._pattern_scores(cleaned)
@@ -300,6 +307,38 @@ class IntentRecognizer:
 
         self._cache.clear()
 
+    def learn(self, message: str, correct: IntentCategory | str) -> None:
+        """Add one human-corrected example to the local similarity templates."""
+
+        cleaned = self._clean_text(message).strip()
+        if not cleaned:
+            raise ValueError("Learned Intent message cannot be empty")
+        try:
+            intent = correct if isinstance(correct, IntentCategory) else IntentCategory(str(correct))
+        except ValueError as exc:
+            raise ValueError(f"Unknown Intent category: {correct}") from exc
+
+        examples = self._learned_templates.setdefault(intent, [])
+        if cleaned not in examples:
+            examples.append(cleaned)
+        # Keep feedback bounded so a long-running process cannot grow forever.
+        del examples[:-50]
+        self.clear_cache()
+
+    def cache_stats(self) -> dict[str, int]:
+        """Return local cache and feedback statistics for diagnostics."""
+
+        return {
+            "size": len(self._cache),
+            "max_size": self.cache_size,
+            "hits": self.cache_hits,
+            "misses": self.cache_misses,
+            "learned_examples": sum(
+                max(0, len(values) - len(_TEMPLATES.get(intent, [])))
+                for intent, values in self._learned_templates.items()
+            ),
+        }
+
     def _pattern_scores(self, message: str) -> dict[IntentCategory, float]:
         """Score all matching patterns so compound requests retain both domains."""
 
@@ -317,7 +356,7 @@ class IntentRecognizer:
         message_vector = self._vectorize(message)
         best_intent = IntentCategory.OTHER
         best_score = 0.0
-        for intent, examples in _TEMPLATES.items():
+        for intent, examples in self._learned_templates.items():
             score = max(
                 self._cosine(message_vector, self._vectorize(example))
                 for example in examples
