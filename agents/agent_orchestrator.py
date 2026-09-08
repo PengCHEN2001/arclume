@@ -610,20 +610,40 @@ class AgentOrchestrator:
             if isinstance(response.error, (LLMConfigurationError, LLMRequestError)):
                 raise response.error
 
-    def get_stats(self) -> dict[str, dict[str, float | int]]:
-        """Expose routing statistics for the future Monitor module."""
+    def get_stats(self) -> dict[str, dict[str, Any]]:
+        """Expose per-Agent statistics and profile metadata to Monitor/API."""
 
-        return {
-            agent_type.value: {
-                "total": stats[0].total,
-                "success": stats[0].success,
-                "success_rate": round(stats[0].success_rate, 4),
-                "average_ms": round(stats[0].average_ms, 2),
-                "routing_score": stats[0].routing_score(),
-            }
-            for agent_type, stats in self._stats.items()
-            if stats
-        }
+        result: dict[str, dict[str, Any]] = {}
+        for agent_type, agents in self._pool.items():
+            stats_list = self._stats.get(agent_type, [])
+            for index, (agent, stats) in enumerate(zip(agents, stats_list)):
+                profile = agent.profile
+                average_ms = round(stats.average_ms, 2)
+                result[f"{agent_type.value}_{index}"] = {
+                    "total": stats.total,
+                    "success": stats.success,
+                    "success_rate": round(stats.success_rate, 4),
+                    "avg_ms": average_ms,
+                    "average_ms": average_ms,
+                    "monitor_penalty": round(stats.monitor_penalty, 4),
+                    "routing_score": stats.routing_score(),
+                    "role": profile.role,
+                    "workflow": list(profile.workflow),
+                    "tool_scope": list(profile.tool_scope),
+                    "available_tools": list(profile.tool_scope),
+                    "model": profile.model
+                    or getattr(getattr(agent.llm, "settings", None), "model", None),
+                }
+        return result
+
+    def update_routing_penalties(self, penalties: dict[str, float]) -> None:
+        """Apply bounded online penalties supplied by PerformanceMonitor."""
+
+        for agent_type, stats_list in self._stats.items():
+            for index, stats in enumerate(stats_list):
+                key = f"{agent_type.value}_{index}"
+                penalty = penalties.get(key, 0.0)
+                stats.monitor_penalty = min(max(float(penalty), 0.0), 0.9)
 
     def list_agents(self) -> list[AgentType]:
         """Return the currently registered executable Agent types."""

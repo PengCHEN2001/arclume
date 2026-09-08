@@ -8,7 +8,7 @@ from typing import AsyncIterator
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from agents.agent_orchestrator import AgentOrchestrator
 from agents.billing_agent import BillingAgent
 from agents.general_agent import GeneralAgent
@@ -24,6 +24,7 @@ from memory import MemoryStoreError
 from memory.conversation_memory import ConversationMemory
 from memory.long_term_memory import LongTermMemory
 from memory.state_store import StateStore
+from monitor import PerformanceMonitor
 from schemas.api import ChatRequest, ChatResponse
 from schemas.tool import ToolCall
 from tools.tool_manager import ToolManager
@@ -111,10 +112,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         billing_agent=app.state.billing_agent,
         intent_recognizer=app.state.intent_recognizer,
     )
+    monitor_enabled = os.getenv("ARCLUME_MONITOR_ENABLED", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    try:
+        monitor_interval = max(
+            1.0,
+            float(os.getenv("ARCLUME_MONITOR_INTERVAL_SECONDS", "10")),
+        )
+    except ValueError:
+        monitor_interval = 10.0
+    try:
+        prometheus_port_value = int(os.getenv("PROMETHEUS_PORT", "0"))
+    except ValueError:
+        prometheus_port_value = 0
+    app.state.monitor = PerformanceMonitor(
+        orchestrator=app.state.orchestrator,
+        tool_manager=app.state.tool_manager,
+        interval_seconds=monitor_interval,
+        webhook_url=os.getenv("ARCLUME_MONITOR_WEBHOOK_URL") or None,
+        prometheus_port=prometheus_port_value or None,
+    )
+    if monitor_enabled:
+        await app.state.monitor.start()
     # Keep the general Agent available for simple integrations during migration.
     app.state.agent = app.state.general_agent
     logger.info("Arclume API started; LLM configured=%s", app.state.llm.is_configured)
     yield
+    await app.state.monitor.stop()
     await app.state.memory.close()
     await app.state.state_store.close()
     if app.state.long_term_memory is not None:
@@ -179,6 +206,12 @@ async def health(request: Request) -> dict[str, object]:
         ],
         "intent_llm_enabled": request.app.state.intent_recognizer.use_llm,
         "agent_stats": request.app.state.orchestrator.get_stats(),
+        "monitor": {
+            "active": request.app.state.monitor.active,
+            "prometheus_available": request.app.state.monitor.summary()[
+                "prometheus_available"
+            ],
+        },
     }
 
 
@@ -262,6 +295,21 @@ async def trace(request_id: str, request: Request) -> dict[str, object]:
         "request_id": request_id,
         "events": [event.model_dump(mode="json") for event in events],
     }
+
+
+@app.get("/monitor")
+async def monitor_summary(request: Request) -> dict[str, object]:
+    """Return Agent/Tool health, active alerts, and optimization suggestions."""
+
+    return request.app.state.monitor.summary()
+
+
+@app.get("/metrics")
+async def prometheus_metrics(request: Request) -> Response:
+    """Expose Prometheus-compatible metrics for local or platform scraping."""
+
+    body, media_type = request.app.state.monitor.metrics_payload()
+    return Response(content=body, media_type=media_type)
 
 
 @app.get("/knowledge/search")

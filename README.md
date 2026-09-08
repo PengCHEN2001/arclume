@@ -5,9 +5,9 @@ understandable runtime into an industrial-grade orchestration platform.
 
 ## Current stage
 
-The fourteenth stage adds metadata-driven Skills and complete request tracing
-on top of Hybrid RAG, layered Memory, governed Tool execution, and the
-structured multi-Agent runtime:
+The fifteenth stage adds online Monitor capabilities on top of metadata-driven
+Skills, complete request tracing, Hybrid RAG, layered Memory, governed Tool
+execution, and the structured multi-Agent runtime:
 
 - FastAPI provides the HTTP boundary.
 - Pydantic validates incoming and outgoing data.
@@ -32,8 +32,8 @@ structured multi-Agent runtime:
   `ARCLUME_INTENT_LLM_ENABLED`.
 - `agents/agent_orchestrator.py` selects the primary Agent, can run a technical
   and billing Agent in parallel for compound requests, handles clarification,
-  records basic Agent performance, exposes request-level Tool information, and
-  falls back to the General Agent.
+  records per-Agent performance, accepts Monitor routing penalties, exposes
+  request-level Tool information, and falls back to the General Agent.
 - `core/context_builder.py` assembles the temporary model context from the
   current message, recent history, session summary, episodic memory, user
   profile, AgentState, and retrieved evidence.
@@ -55,6 +55,9 @@ structured multi-Agent runtime:
 - `core/skill_loader.py` loads human-authored Markdown Skills, parses metadata,
   filters by Agent and keywords, supports SKILL.md/Markdown/text/JSON inputs,
   enforces a bounded prompt budget, and supports mtime-aware hot reload.
+- `monitor/performance_monitor.py` collects Agent and Tool metrics, detects
+  threshold violations and unusual changes, records alerts and suggestions,
+  and feeds bounded routing penalties back to the Orchestrator.
 - `skills/` contains metadata-driven refund, logistics, technical, and
   human-escalation instructions.
 - `tools/tool_functions.py` contains the current Tool functions and registers
@@ -75,11 +78,13 @@ structured multi-Agent runtime:
   retrieval and reliability checks.
 - `/skills` lists Skill metadata and `/skills/reload` reloads edited Skill files.
 - `/traces/{request_id}` exposes the retained request-level execution trace.
+- `/monitor` exposes Agent/Tool health, active alerts, and suggestions.
+- `/metrics` exposes Prometheus-compatible metrics without requiring a model call.
 - Order and logistics Tools currently return deterministic mock data. Ticket
   creation is marked high risk and stops for approval.
 - The current Agent Tool loop is bounded and only runs when the configured provider
   supports compatible function calling; otherwise the text path remains active.
-- Monitor and Evaluation are not implemented yet. Automatic Skill generation,
+- Evaluation is not implemented yet. Automatic Skill generation,
   modification, publication, and rollback remain intentionally disabled.
 
 ## Python environment
@@ -117,6 +122,8 @@ Useful endpoints:
 - `POST /chat` — single-Agent customer-service request with Redis persistence.
 - `GET /knowledge/search` — semantic search without calling the model.
 - `GET /knowledge/stats` — indexed knowledge chunk count.
+- `GET /monitor` — Agent/Tool health, alerts, and operational suggestions.
+- `GET /metrics` — Prometheus-compatible runtime metrics.
 - `GET /docs` — interactive API documentation.
 
 The service can start without a model key so the HTTP layer can be inspected.

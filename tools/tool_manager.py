@@ -266,13 +266,20 @@ class ToolManager(ToolExecutor):
                 "success": stats.success,
                 "failed": stats.failed,
                 "success_rate": round(stats.success_rate, 4),
+                "avg_latency_ms": round(stats.average_latency_ms, 2),
                 "average_latency_ms": round(stats.average_latency_ms, 2),
                 "cache_hits": stats.cache_hits,
                 "fallback_count": stats.fallback_count,
+                "consecutive_fails": stats.consecutive_failures,
                 "consecutive_failures": stats.consecutive_failures,
                 "circuit_state": self._breakers[name].state.value,
             }
         return snapshot
+
+    def get_stats(self) -> dict[str, dict[str, float | int | str]]:
+        """Expose the Tool statistics using the Monitor-facing method name."""
+
+        return self.stats_snapshot()
 
     async def search_with_rewrite(self, query: str, *, top_k: int = 5) -> dict[str, Any]:
         """Run the complete intent-gated RAG retrieval pipeline."""

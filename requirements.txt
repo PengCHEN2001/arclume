@@ -9,6 +9,9 @@ python-dotenv==1.0.1
 # Asynchronous model transport
 httpx==0.28.1
 
+# Optional Prometheus metrics for the online Monitor
+prometheus-client==0.21.1
+
 # Short-term conversation and AgentState persistence
 redis==5.2.1
 
