@@ -16,6 +16,12 @@ from agents.technical_agent import TechnicalAgent
 from core.intent_recognizer import IntentRecognizer
 from core.llm_utils import LLMClient, LLMConfigurationError, LLMRequestError
 from core.skill_loader import SkillError, SkillLoader
+from evaluation.evaluator import (
+    DEFAULT_DIALOG_CASES,
+    DEFAULT_INTENT_CASES,
+    EndToEndEvaluator,
+    IntentTestCase,
+)
 from harness.runtime import HarnessRuntime
 from harness.trace import TraceRecorder
 from knowledge import KnowledgeBaseError
@@ -25,7 +31,11 @@ from memory.conversation_memory import ConversationMemory
 from memory.long_term_memory import LongTermMemory
 from memory.state_store import StateStore
 from monitor import PerformanceMonitor
-from schemas.api import ChatRequest, ChatResponse
+from schemas.api import (
+    ChatRequest,
+    ChatResponse,
+    EvalRunInput,
+)
 from schemas.tool import ToolCall
 from tools.tool_manager import ToolManager
 from tools.tool_functions import register_tools
@@ -111,6 +121,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         technical_agent=app.state.technical_agent,
         billing_agent=app.state.billing_agent,
         intent_recognizer=app.state.intent_recognizer,
+    )
+    app.state.evaluator = EndToEndEvaluator(
+        orchestrator=app.state.orchestrator,
+        recognizer=app.state.intent_recognizer,
+        llm=app.state.llm,
+        baseline_path=os.getenv(
+            "ARCLUME_EVAL_BASELINE_PATH",
+            "evaluation/baselines/baseline.json",
+        ),
     )
     monitor_enabled = os.getenv("ARCLUME_MONITOR_ENABLED", "true").strip().lower() in {
         "1",
@@ -370,6 +389,50 @@ async def knowledge_stats(request: Request) -> dict[str, object]:
     except KnowledgeBaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"collection": KnowledgeBase.COLLECTION_NAME, "total_chunks": count}
+
+
+@app.post("/eval/run")
+async def run_evaluation(
+    request: Request,
+    body: EvalRunInput | None = None,
+) -> dict[str, object]:
+    """Run the Intent and end-to-end Evaluation suite."""
+
+    evaluator: EndToEndEvaluator | None = getattr(
+        request.app.state,
+        "evaluator",
+        None,
+    )
+    if evaluator is None:
+        raise HTTPException(status_code=503, detail="Evaluation is not ready")
+
+    if body and body.intent_cases is not None:
+        intent_cases = [
+            IntentTestCase(
+                message=item.message,
+                expected_intent=item.expected_intent,
+                context=item.context,
+            )
+            for item in body.intent_cases
+        ]
+    else:
+        intent_cases = DEFAULT_INTENT_CASES
+
+    if body and body.dialog_cases is not None:
+        dialog_cases: list[dict[str, object]] = []
+        for item in body.dialog_cases:
+            value = item.model_dump(exclude_none=True)
+            if "conversation_id" in value:
+                value["conv_id"] = value.pop("conversation_id")
+            dialog_cases.append(value)
+    else:
+        dialog_cases = DEFAULT_DIALOG_CASES
+
+    report = await evaluator.run(
+        intent_cases=intent_cases,
+        dialog_cases=dialog_cases,
+    )
+    return report.to_dict()
 
 
 @app.get("/tools/stats")

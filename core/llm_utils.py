@@ -101,6 +101,8 @@ class LLMClient:
         message: str,
         system_prompt: str | None = None,
         history: list[dict[str, str]] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         """Send a system prompt, optional history, and one user message.
 
@@ -126,6 +128,10 @@ class LLMClient:
             "model": self.settings.model,
             "messages": messages,
         }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         headers = {
             "Authorization": f"Bearer {self.settings.api_key}",
             "Content-Type": "application/json",

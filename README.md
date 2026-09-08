@@ -80,11 +80,17 @@ execution, and the structured multi-Agent runtime:
 - `/traces/{request_id}` exposes the retained request-level execution trace.
 - `/monitor` exposes Agent/Tool health, active alerts, and suggestions.
 - `/metrics` exposes Prometheus-compatible metrics without requiring a model call.
+- `evaluation/` provides dependency-free Intent, routing, and retrieval metrics,
+  per-class Precision/Recall/F1, end-to-end reports, baseline regression checks,
+  and an optional LLM Judge adapter.
+- `POST /eval/run` runs the Intent and single-/multi-turn dialog Evaluation
+  suite. It requires the same runtime dependencies as `/chat` for the end-to-end
+  Agent cases.
 - Order and logistics Tools currently return deterministic mock data. Ticket
   creation is marked high risk and stops for approval.
 - The current Agent Tool loop is bounded and only runs when the configured provider
   supports compatible function calling; otherwise the text path remains active.
-- Evaluation is not implemented yet. Automatic Skill generation,
+- Evaluation does not modify the live system. Automatic Skill generation,
   modification, publication, and rollback remain intentionally disabled.
 
 ## Python environment
@@ -153,4 +159,17 @@ Run the dependency-free Memory tests with:
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Run the local Intent and routing Evaluation without a model call:
+
+```bash
+./.venv/bin/python -m evaluation \
+  --report evaluation/baselines/local-intent-routing.json
+```
+
+Run the integrated Evaluation after starting the API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/eval/run
 ```

@@ -39,3 +39,28 @@ class ChatResponse(BaseModel):
     request_id: str | None = None
     tools_used: list[str] = Field(default_factory=list)
     tool_traces: list[dict[str, object]] = Field(default_factory=list)
+
+
+class EvalIntentCaseInput(BaseModel):
+    """One optional custom Intent case for the Evaluation endpoint."""
+
+    message: str = Field(min_length=1)
+    expected_intent: str = Field(min_length=1)
+    context: dict[str, object] | None = None
+
+
+class EvalDialogCaseInput(BaseModel):
+    """One single-turn or multi-turn dialog Evaluation case."""
+
+    question: str | None = None
+    turns: list[str] | None = None
+    user_id: str | None = None
+    conversation_id: str | None = None
+    reference_answer: str | None = None
+
+
+class EvalRunInput(BaseModel):
+    """Optional custom cases accepted by ``POST /eval/run``."""
+
+    intent_cases: list[EvalIntentCaseInput] | None = None
+    dialog_cases: list[EvalDialogCaseInput] | None = None

@@ -1,0 +1,59 @@
+{
+  "intent_cases": [
+    {
+      "case_id": "greeting-001",
+      "message": "Hello, is anyone there?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "refund-001",
+      "message": "I want to request a refund",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment-001",
+      "message": "I was charged twice",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "technical-login-001",
+      "message": "I cannot sign in",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "logistics-001",
+      "message": "When will my package arrive?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "handoff-001",
+      "message": "Please connect me to a human",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "technical-crash-001",
+      "message": "The app crashed",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "invoice-001",
+      "message": "I need an invoice",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-security-001",
+      "message": "I saw a suspicious login",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    }
+  ],
+  "retrieval_cases": []
+}
