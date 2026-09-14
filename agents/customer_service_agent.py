@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import asyncio
 import json
 import logging
+import re
 from uuid import uuid4
 
 from core.context_builder import ContextBuilder
@@ -30,7 +31,15 @@ DEFAULT_SYSTEM_PROMPT = (
     "Use the conversation and any relevant knowledge provided in the context. "
     "Do not invent policies or facts when the available information is insufficient. "
     "If the request requires account access, a business-system operation, "
-    "or human judgment, explain the limitation and recommend human support."
+    "or human judgment, explain the limitation and recommend human support. "
+    "If human support is required, start the final answer with "
+    "'[ESCALATE]' followed by a short reason. Do not use this marker for ordinary requests."
+)
+
+
+_ESCALATION_MARKER = re.compile(
+    r"^\s*\[ESCALATE\]\s*(?P<reason>[^\n]*)",
+    re.IGNORECASE,
 )
 
 
@@ -88,6 +97,9 @@ class CustomerServiceAgent:
         self.max_tool_iterations = max_tool_iterations # Safety limit for one Agent turn
         self._last_tools_used: list[str] = []          # Tools used in the latest turn
         self._last_tool_traces: list[dict[str, object]] = [] # Latest Tool call details
+        self._last_escalated = False                   # Agent's explicit escalation signal
+        self._last_escalation_reason: str | None = None # Why human support is needed
+        self._last_escalation_source: str | None = None # intent, policy, tool_failure, or agent_decision
         self.context_builder = context_builder or ContextBuilder([self.system_prompt])
 
     async def respond(
@@ -125,6 +137,9 @@ class CustomerServiceAgent:
 
         self._last_tools_used = []
         self._last_tool_traces = []
+        self._last_escalated = False
+        self._last_escalation_reason = None
+        self._last_escalation_source = None
 
         if (self.memory or self.state_store) and not conversation_id:
             raise ValueError("conversation_id is required when persistence is enabled")
@@ -316,6 +331,9 @@ class CustomerServiceAgent:
                 llm_kwargs["history"] = history_payload
             answer = await self.llm.chat(context.user_message, **llm_kwargs)
 
+        # Convert the model's small protocol marker into structured Agent output.
+        answer = self._parse_escalation_marker(answer)
+
         if persist and conversation_id and self.memory:
             await self.memory.add_message(
                 user_id,
@@ -331,7 +349,8 @@ class CustomerServiceAgent:
 
         if persist and conversation_id and self.state_store and state:
             needs_human = (
-                urgency in {"high", "critical"}
+                self._last_escalated
+                or urgency in {"high", "critical"}
                 or intent in {"escalation", "human_handoff"}
             )
             state = state.model_copy(
@@ -546,17 +565,61 @@ class CustomerServiceAgent:
     ) -> None:
         """Keep a small normalized record for the Orchestrator result."""
 
-        if getattr(result, "success", False) and tool_name not in self._last_tools_used:
+        success = bool(getattr(result, "success", False))
+        requires_approval = bool(getattr(result, "requires_approval", False))
+        error = getattr(result, "error", None)
+        cached = bool(getattr(result, "cached", False))
+        fallback_used = bool(getattr(result, "fallback_used", False))
+        reranked = bool(getattr(result, "reranked", False))
+
+        if success and tool_name not in self._last_tools_used:
             self._last_tools_used.append(tool_name)
+        if not self._last_escalated and requires_approval:
+            self._last_escalated = True
+            self._last_escalation_source = "policy"
+            self._last_escalation_reason = str(
+                error or "This Tool action requires human approval."
+            )
+        elif (
+            not self._last_escalated
+            and not success
+            and tool_name != "knowledge_search"
+        ):
+            self._last_escalated = True
+            self._last_escalation_source = "tool_failure"
+            self._last_escalation_reason = str(
+                error or f"Tool '{tool_name}' could not complete the request."
+            )
         self._last_tool_traces.append(
             {
                 "agent_name": self.name,
                 "tool_name": tool_name,
                 "call_id": call_id,
-                "success": bool(getattr(result, "success", False)),
-                "error": getattr(result, "error", None),
+                "success": success,
+                "error": error,
                 "duration_ms": getattr(result, "duration_ms", None),
+                "cached": cached,
+                "fallback_used": fallback_used,
+                "reranked": reranked,
+                "requires_approval": requires_approval,
             }
+        )
+
+    def _parse_escalation_marker(self, answer: str) -> str:
+        """Extract the explicit Agent escalation marker and keep user text clean."""
+
+        match = _ESCALATION_MARKER.match(answer)
+        if not match:
+            return answer.strip()
+
+        self._last_escalated = True
+        self._last_escalation_source = "agent_decision"
+        self._last_escalation_reason = (
+            match.group("reason").strip()
+            or "The Agent determined that human support is required."
+        )
+        return answer[match.end():].lstrip() or (
+            "I have marked this request for human support."
         )
 
     @property
@@ -570,3 +633,21 @@ class CustomerServiceAgent:
         """Return Tool traces produced during the latest Agent turn."""
 
         return [dict(trace) for trace in self._last_tool_traces]
+
+    @property
+    def last_escalated(self) -> bool:
+        """Return whether the Agent explicitly requested human support."""
+
+        return self._last_escalated
+
+    @property
+    def last_escalation_reason(self) -> str | None:
+        """Return the latest structured escalation reason."""
+
+        return self._last_escalation_reason
+
+    @property
+    def last_escalation_source(self) -> str | None:
+        """Return what produced the escalation signal."""
+
+        return self._last_escalation_source

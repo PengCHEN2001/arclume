@@ -64,6 +64,8 @@ class AgentResponse:
     success: bool
     latency_ms: float = 0.0
     escalated: bool = False
+    escalation_reason: str | None = None
+    escalation_source: str | None = None
     tools_used: list[str] = field(default_factory=list)
     tool_traces: list[dict[str, Any]] = field(default_factory=list)
     error: Exception | None = None
@@ -96,6 +98,8 @@ class OrchestratorResult:
     routing_reason: str = ""
     routing_confidence: float = 0.0
     escalated: bool = False
+    escalation_reason: str | None = None
+    escalation_source: str | None = None
     latency_ms: float = 0.0
     tools_used: list[str] = field(default_factory=list)
     tool_traces: list[dict[str, Any]] = field(default_factory=list)
@@ -270,15 +274,21 @@ class AgentOrchestrator:
                     successful,
                     primary_agent=decision.primary_agent.value,
                 )
-            escalated = analysis.urgency in {
-                UrgencyLevel.HIGH,
-                UrgencyLevel.CRITICAL,
-            } or analysis.intent in self._ESCALATION_INTENTS
+            escalated, escalation_reason, escalation_source = self._resolve_escalation(
+                analysis,
+                responses,
+            )
             self._record_trace(
                 TraceEventType.RESPONSE_COMPOSED,
                 request_id=request_id,
                 conversation_id=conversation_id,
-                data={"agent_count": len(successful), "parallel": True},
+                data={
+                    "agent_count": len(successful),
+                    "parallel": True,
+                    "escalated": escalated,
+                    "escalation_reason": escalation_reason,
+                    "escalation_source": escalation_source,
+                },
             )
             self._record_trace(
                 TraceEventType.REQUEST_COMPLETED,
@@ -295,6 +305,8 @@ class AgentOrchestrator:
                 routing_reason=decision.reason,
                 routing_confidence=decision.confidence,
                 escalated=escalated,
+                escalation_reason=escalation_reason,
+                escalation_source=escalation_source,
                 latency_ms=(time.monotonic() - started) * 1000,
                 tools_used=self._unique_tools(responses),
                 tool_traces=self._tool_traces(responses),
@@ -336,15 +348,22 @@ class AgentOrchestrator:
         else:
             response_text = response.content
 
-        escalated = response.escalated or analysis.urgency in {
-            UrgencyLevel.HIGH,
-            UrgencyLevel.CRITICAL,
-        } or analysis.intent in self._ESCALATION_INTENTS
+        escalated, escalation_reason, escalation_source = self._resolve_escalation(
+            analysis,
+            [response],
+        )
         self._record_trace(
             TraceEventType.RESPONSE_COMPOSED,
             request_id=request_id,
             conversation_id=conversation_id,
-            data={"agent_count": 1, "parallel": False, "success": response.success},
+            data={
+                "agent_count": 1,
+                "parallel": False,
+                "success": response.success,
+                "escalated": escalated,
+                "escalation_reason": escalation_reason,
+                "escalation_source": escalation_source,
+            },
         )
         self._record_trace(
             TraceEventType.REQUEST_COMPLETED,
@@ -360,6 +379,8 @@ class AgentOrchestrator:
             routing_reason=decision.reason,
             routing_confidence=decision.confidence,
             escalated=escalated,
+            escalation_reason=escalation_reason,
+            escalation_source=escalation_source,
             latency_ms=(time.monotonic() - started) * 1000,
             tools_used=list(response.tools_used),
             tool_traces=list(response.tool_traces),
@@ -486,6 +507,9 @@ class AgentOrchestrator:
                 "success": True,
                 "latency_ms": elapsed,
                 "tools_used": list(agent.last_tools_used),
+                "escalated": bool(getattr(agent, "last_escalated", False)),
+                "escalation_reason": getattr(agent, "last_escalation_reason", None),
+                "escalation_source": getattr(agent, "last_escalation_source", None),
             },
         )
         return AgentResponse(
@@ -493,7 +517,12 @@ class AgentOrchestrator:
             content=content,
             success=True,
             latency_ms=elapsed,
-            escalated=analysis.intent in self._ESCALATION_INTENTS,
+            escalated=(
+                analysis.intent in self._ESCALATION_INTENTS
+                or bool(getattr(agent, "last_escalated", False))
+            ),
+            escalation_reason=getattr(agent, "last_escalation_reason", None),
+            escalation_source=getattr(agent, "last_escalation_source", None),
             tools_used=agent.last_tools_used,
             tool_traces=agent.last_tool_traces,
         )
@@ -586,6 +615,29 @@ class AgentOrchestrator:
             and len(message.strip()) > 2
             and analysis.confidence < 0.5
         )
+
+    def _resolve_escalation(
+        self,
+        analysis: IntentResult,
+        responses: list[AgentResponse],
+    ) -> tuple[bool, str | None, str | None]:
+        """Combine deterministic routing signals with each Agent's own signal."""
+
+        if analysis.intent in self._ESCALATION_INTENTS:
+            return True, "The request explicitly requires human support.", "intent"
+        if analysis.urgency == UrgencyLevel.CRITICAL:
+            return True, "The request has critical urgency.", "urgency"
+        if analysis.urgency == UrgencyLevel.HIGH:
+            return True, "The request has high urgency.", "urgency"
+        for response in responses:
+            if response.escalated:
+                return (
+                    True,
+                    response.escalation_reason
+                    or "The Agent determined that human support is required.",
+                    response.escalation_source or "agent_decision",
+                )
+        return False, None, None
 
     @staticmethod
     def _unique_tools(responses: list[AgentResponse]) -> list[str]:

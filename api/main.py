@@ -300,6 +300,8 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         routing_reason=result.routing_reason,
         routing_confidence=result.routing_confidence,
         escalated=result.escalated,
+        escalation_reason=result.escalation_reason,
+        escalation_source=result.escalation_source,
         tools_used=result.tools_used,
         tool_traces=result.tool_traces,
     )

@@ -50,6 +50,12 @@ class EscalationAgent(CustomerServiceAgent):
         if (self.memory or self.state_store) and not conversation_id:
             raise ValueError("conversation_id is required when persistence is enabled")
 
+        self._last_escalated = True
+        self._last_escalation_source = "agent_decision"
+        self._last_escalation_reason = (
+            intent or "The request was routed to human support."
+        )
+
         if persist and conversation_id and self.memory:
             await self.memory.add_message(
                 user_id,

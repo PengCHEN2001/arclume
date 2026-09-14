@@ -36,6 +36,8 @@ class ChatResponse(BaseModel):
     routing_reason: str | None = None
     routing_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     escalated: bool = False
+    escalation_reason: str | None = None
+    escalation_source: str | None = None
     request_id: str | None = None
     tools_used: list[str] = Field(default_factory=list)
     tool_traces: list[dict[str, object]] = Field(default_factory=list)

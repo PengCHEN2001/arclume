@@ -188,7 +188,17 @@ class HarnessRuntime:
                 agent_name=trace_agent_name,
                 call_id=call.call_id,
                 tool_name=call.tool_name,
-                data={"success": False, "blocked": True, "reason": decision.reason},
+                data={
+                    "success": False,
+                    "blocked": True,
+                    "reason": decision.reason,
+                    "error": decision.reason,
+                    "duration_ms": None,
+                    "cached": False,
+                    "fallback_used": False,
+                    "reranked": False,
+                    "requires_approval": False,
+                },
             )
             return result
 
@@ -212,6 +222,11 @@ class HarnessRuntime:
                     "blocked": True,
                     "requires_approval": True,
                     "reason": decision.reason,
+                    "error": decision.reason,
+                    "duration_ms": None,
+                    "cached": False,
+                    "fallback_used": False,
+                    "reranked": False,
                 },
             )
             return result

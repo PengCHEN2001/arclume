@@ -14,3 +14,4 @@ logs/
 data/chroma/
 data/**/*.sqlite3
 .DS_Store
+.pnpm-store/

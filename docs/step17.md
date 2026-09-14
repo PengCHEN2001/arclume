@@ -219,4 +219,4 @@ curl http://127.0.0.1:8000/health
 - Compose 具备 API、Redis、ChromaDB、Prometheus 和 Nginx 的部署配置。
 - 本地单元测试全部通过。
 
-完成本步后，可以开始按照 Step1 到 Step17 逐个阅读代码、理解设计和准备面试表达。
+
