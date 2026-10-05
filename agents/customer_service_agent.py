@@ -110,6 +110,8 @@ class CustomerServiceAgent:
         conversation_id: str | None = None,
         skill_names: list[str] | None = None,
         knowledge_enabled: bool = True,
+        planned_tool_name: str | None = None,
+        information_need: str | None = None,
         intent: str | None = None,
         intent_group: str | None = None,
         intent_confidence: float = 0.0,
@@ -120,15 +122,16 @@ class CustomerServiceAgent:
         request_id: str | None = None,
         memory_context: dict[str, object] | None = None,
         persist: bool = True,
+        persist_conversation: bool = True,
+        task_scoped: bool = False,
     ) -> str:
         """Process one turn, including Context construction and persistence.
 
         The flow is: validate the message, load recent history and AgentState,
         save the user message, retrieve relevant knowledge, build Context, call
         the model, save the reply, and persist the updated active-case state.
-        The Orchestrator supplies intent and routing metadata. ``persist=False``
-        is used for supporting Agents so parallel collaboration does not write
-        duplicate messages into the shared conversation history.
+        The Orchestrator supplies intent and routing metadata. It can defer
+        conversation writes while retaining the primary Agent's state writes.
         """
 
         cleaned_message = message.strip()  # Remove accidental surrounding whitespace
@@ -156,7 +159,7 @@ class CustomerServiceAgent:
                     query=cleaned_message,
                 )
             history = list(loaded_memory.get("recent_messages") or [])
-            if persist:
+            if persist and persist_conversation:
                 await self.memory.add_message(
                     user_id,
                     conversation_id,
@@ -191,20 +194,17 @@ class CustomerServiceAgent:
             if isinstance(item.get("function"), dict)
             and item["function"].get("name")
         }
-        tool_loop_active = bool(
-            tool_schemas
-            and self.enable_tool_loop
-            and callable(getattr(self.llm, "chat_with_tools", None))
-        )
-
         knowledge_results = []
-        if self.knowledge_base and knowledge_enabled and not tool_loop_active:
+        prefetch_status: dict[str, object] = {}
+        prefetched_tools: set[str] = set()
+        if knowledge_enabled and (self.knowledge_base or self.harness):
+            prefetch_status["knowledge_search"] = "unavailable"
             try:
-                if self.harness:
-                    # Even low-risk retrieval uses the same Tool boundary in the API flow.
+                if self.harness and "knowledge_search" in active_tool_scope:
+                    call_id = str(uuid4())
                     tool_result = await self.harness.handle_tool_call(
                         ToolCall(
-                            call_id=str(uuid4()),
+                            call_id=call_id,
                             tool_name="knowledge_search",
                             arguments={
                                 "query": cleaned_message,
@@ -224,24 +224,84 @@ class CustomerServiceAgent:
                     )
                     self._record_tool_result(
                         tool_name="knowledge_search",
-                        call_id="knowledge_search",
+                        call_id=call_id,
                         result=tool_result,
                     )
+                    prefetched_tools.add("knowledge_search")
                     if tool_result.success and isinstance(tool_result.data, list):
                         knowledge_results = tool_result.data
                     elif tool_result.success and isinstance(tool_result.data, dict):
                         knowledge_results = list(tool_result.data.get("results") or [])
                     elif tool_result.error:
                         logger.warning("Knowledge retrieval skipped: %s", tool_result.error)
-                else:
+                    prefetch_status["knowledge_search"] = (
+                        "results_found" if knowledge_results else "no_verified_results"
+                    )
+                elif self.knowledge_base and not self.harness:
                     # Keep direct use available for small unit tests without a Harness.
                     knowledge_results = await self.knowledge_base.search_async(
                         cleaned_message,
                         top_k=self.knowledge_top_k,
                     )
+                    prefetch_status["knowledge_search"] = (
+                        "results_found" if knowledge_results else "no_verified_results"
+                    )
             except KnowledgeBaseError as exc:
                 # Retrieval is helpful evidence, but it must not take down chat.
                 logger.warning("Knowledge retrieval skipped: %s", exc)
+                prefetch_status["knowledge_search"] = "unavailable"
+
+        if planned_tool_name:
+            prefetch_status[planned_tool_name] = "unavailable"
+            tool_field = {
+                "order_query": "order_id",
+                "logistics_query": "tracking_id",
+            }.get(planned_tool_name)
+            values = (entities or {}).get(tool_field) if tool_field else None
+            if (
+                self.harness and planned_tool_name in active_tool_scope
+                and tool_field and isinstance(values, list) and values
+            ):
+                call_id = str(uuid4())
+                tool_result = await self.harness.handle_tool_call(
+                    ToolCall(
+                        call_id=call_id,
+                        tool_name=planned_tool_name,
+                        arguments={tool_field: str(values[0])},
+                        requested_by=self.name,
+                    ),
+                    state=state,
+                    context=self._tool_context(
+                        state=state,
+                        conversation_id=conversation_id,
+                        intent=intent,
+                        entities=entities,
+                        request_id=request_id,
+                    ),
+                    allowed_tools=active_tool_scope,
+                )
+                self._record_tool_result(
+                    tool_name=planned_tool_name,
+                    call_id=call_id,
+                    result=tool_result,
+                )
+                prefetched_tools.add(planned_tool_name)
+                prefetch_status[planned_tool_name] = (
+                    tool_result.data if tool_result.success else {"error": tool_result.error}
+                )
+
+        # A planned read is executed once through Harness before model generation.
+        # Other optional tools can still be selected by the model.
+        tool_schemas = [
+            schema for schema in tool_schemas
+            if schema.get("function", {}).get("name") not in prefetched_tools
+        ]
+        active_tool_scope -= prefetched_tools
+        tool_loop_active = bool(
+            tool_schemas
+            and self.enable_tool_loop
+            and callable(getattr(self.llm, "chat_with_tools", None))
+        )
 
         self._record_trace(
             TraceEventType.RAG_COMPLETED,
@@ -249,14 +309,27 @@ class CustomerServiceAgent:
             conversation_id=conversation_id,
             data={
                 "enabled": knowledge_enabled,
+                "attempted": "knowledge_search" in prefetched_tools,
                 "tool_loop_active": tool_loop_active,
                 "result_count": len(knowledge_results),
             },
         )
 
-        selected_skill_names = (
-            list(skill_names) if skill_names is not None else self.default_skill_names
-        )
+        # The Orchestrator passes an explicit list derived from the fine-grained
+        # intent.  That decision is authoritative for this turn: an empty list
+        # means no Skill should be injected, while a non-empty list must not be
+        # vetoed again merely because the user's wording misses a metadata
+        # keyword.  Direct Agent use without a requested Skill keeps the legacy
+        # keyword-based discovery behavior.
+        if skill_names is not None:
+            selected_skill_names: list[str] | None = list(skill_names)
+            require_keyword_match = False
+        elif self.default_skill_names:
+            selected_skill_names = list(self.default_skill_names)
+            require_keyword_match = False
+        else:
+            selected_skill_names = None
+            require_keyword_match = True
         skill_instructions: list[str] = []
         selected_skill_documents = []
         if self.skill_loader:
@@ -266,6 +339,7 @@ class CustomerServiceAgent:
                     self.name,
                     cleaned_message,
                     selected_skill_names,
+                    require_keyword_match=require_keyword_match,
                 )
                 skill_prompt = self.skill_loader.render(selected_skill_documents)
                 if skill_prompt:
@@ -304,7 +378,10 @@ class CustomerServiceAgent:
                 "supporting_agents": list(supporting_agents or []),
                 "routing_reason": routing_reason,
                 "rag_enabled": knowledge_enabled,
+                "information_need": information_need,
+                "prefetch_status": prefetch_status,
                 "request_id": request_id,
+                "task_scoped": task_scoped,
             },
         )
         history_payload = self.context_builder.render_history(context)
@@ -312,6 +389,28 @@ class CustomerServiceAgent:
         profile_prompt = self._profile_prompt()
         if profile_prompt:
             system_prompt = f"{system_prompt}\n\n{profile_prompt}" if system_prompt else profile_prompt
+        if task_scoped:
+            system_prompt = (
+                f"{system_prompt}\n\nYou are handling only the delegated subtask in the current "
+                "user message. Answer only that subtask. Conversation history may mention other "
+                "questions or earlier full answers; use it only for necessary context and do not "
+                "repeat, expand, or answer those other topics."
+            )
+        if knowledge_enabled and not knowledge_results:
+            system_prompt = (
+                f"{system_prompt}\n\nNo verified knowledge was retrieved for this request. "
+                "Do not state an unverified policy or troubleshooting fact as certain."
+            )
+        if information_need in {"live_data", "mixed"}:
+            system_prompt = (
+                f"{system_prompt}\n\nOnly a verified external business system can confirm current "
+                "customer-specific status. Mock tool results are demonstrations, not live facts."
+            )
+        if information_need == "action":
+            system_prompt = (
+                f"{system_prompt}\n\nThis request asks for an operation. No write operation has been "
+                "completed; explain the safe next step without claiming execution."
+            )
         if tool_loop_active:
             answer = await self._run_tool_loop(
                 user_message=context.user_message,
@@ -334,7 +433,7 @@ class CustomerServiceAgent:
         # Convert the model's small protocol marker into structured Agent output.
         answer = self._parse_escalation_marker(answer)
 
-        if persist and conversation_id and self.memory:
+        if persist and persist_conversation and conversation_id and self.memory:
             await self.memory.add_message(
                 user_id,
                 conversation_id,
@@ -368,7 +467,9 @@ class CustomerServiceAgent:
             request_id=request_id,
             conversation_id=conversation_id,
             data={
-                "conversation_persisted": bool(persist and conversation_id and self.memory),
+                "conversation_persisted": bool(
+                    persist and persist_conversation and conversation_id and self.memory
+                ),
                 "state_persisted": bool(persist and conversation_id and self.state_store),
             },
         )
@@ -505,24 +606,30 @@ class CustomerServiceAgent:
                     raise RuntimeError("Agent returned an empty final response")
                 return completion.content.strip()
 
+            returned_tool_calls: list[dict[str, object]] = []
+            for call in completion.tool_calls:
+                returned_call: dict[str, object] = {
+                    "id": call.call_id,
+                    "type": "function",
+                    "function": {
+                        "name": call.name,
+                        "arguments": json.dumps(
+                            call.arguments,
+                            ensure_ascii=False,
+                        ),
+                    },
+                }
+                if call.extra_content is not None:
+                    # Gemini 3 validates the thought_signature nested here on
+                    # the next Tool-loop request.  It is opaque provider data,
+                    # so preserve it instead of attempting to construct one.
+                    returned_call["extra_content"] = call.extra_content
+                returned_tool_calls.append(returned_call)
             messages.append(
                 {
                     "role": "assistant",
                     "content": completion.content or None,
-                    "tool_calls": [
-                        {
-                            "id": call.call_id,
-                            "type": "function",
-                            "function": {
-                                "name": call.name,
-                                "arguments": json.dumps(
-                                    call.arguments,
-                                    ensure_ascii=False,
-                                ),
-                            },
-                        }
-                        for call in completion.tool_calls
-                    ],
+                    "tool_calls": returned_tool_calls,
                 }
             )
             for call in completion.tool_calls:

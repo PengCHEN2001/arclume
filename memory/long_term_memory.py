@@ -223,13 +223,12 @@ class LongTermMemory:
         try:
             import chromadb
 
-            settings = chromadb.Settings(anonymized_telemetry=False)
             if self._client is None:
                 try:
                     self._client = chromadb.HttpClient(
                         host=self.chroma_host,
                         port=self.chroma_port,
-                        settings=settings,
+                        settings=chromadb.Settings(anonymized_telemetry=False),
                     )
                     self._client.heartbeat()
                     self._mode = "server"
@@ -241,7 +240,9 @@ class LongTermMemory:
                         ) from server_error
                     self._client = chromadb.PersistentClient(
                         path=self.local_path,
-                        settings=settings,
+                        # HttpClient mutates its Settings instance into a server
+                        # configuration. Local fallback needs a fresh instance.
+                        settings=chromadb.Settings(anonymized_telemetry=False),
                     )
                     self._mode = "local"
                     logger.warning(

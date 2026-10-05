@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.uv-cache/
+frontend/node_modules/
 
 .env
 .env.*
@@ -15,3 +17,12 @@ data/chroma/
 data/**/*.sqlite3
 .DS_Store
 .pnpm-store/
+
+# Local study notes and experimental implementation; not part of the public snapshot.
+/langchain_langgraph_version/
+/docs/step*.md
+/docs/change_log.md
+/docs/说明.md
+/docs/arrangement/
+/docs/project_guide.md
+/PRD.md

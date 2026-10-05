@@ -1,6 +1,7 @@
 """Tests for dependency-free Evaluation metrics and regression checks."""
 
 import unittest
+from pathlib import Path
 
 from evaluation.judge import JudgeError, LLMJudge
 from evaluation.metrics import (
@@ -11,13 +12,44 @@ from evaluation.metrics import (
     reciprocal_rank,
     retrieval_metrics,
 )
-from evaluation.models import EvaluationReport, IntentCase, RetrievalCase
+from evaluation.models import EvaluationDataset, EvaluationReport, IntentCase, RetrievalCase
 from evaluation.regression import compare_reports
 from evaluation.runner import evaluate_intent_cases, evaluate_retrieval_cases
 from evaluation.evaluator import EndToEndEvaluator, IntentEvaluator, IntentTestCase
+from knowledge.knowledge_base import KnowledgeBase
 
 
 class EvaluationMetricTests(unittest.TestCase):
+    def test_demo_rag_labels_match_current_chunks(self) -> None:
+        root = Path(__file__).parents[1]
+        dataset = EvaluationDataset.load(root / "evaluation/data/rag_cases.json")
+        knowledge = KnowledgeBase()
+        current_ids = {
+            knowledge._chunk_id(f"data/demo_docs/{path.name}", index, chunk)
+            for path in (root / "data/demo_docs").glob("*.md")
+            for index, chunk in enumerate(knowledge._chunk_text(path.read_text(encoding="utf-8")))
+        }
+        labeled_ids = {
+            chunk_id
+            for case in dataset.retrieval_cases
+            for chunk_id in case.relevant_chunk_ids
+        }
+
+        self.assertEqual(len(dataset.retrieval_cases), 18)
+        self.assertTrue(labeled_ids)
+        self.assertFalse(labeled_ids - current_ids, "RAG labels reference stale chunk IDs")
+
+    def test_full_intent_dataset_contains_500_labeled_cases(self) -> None:
+        dataset = EvaluationDataset.load(
+            Path(__file__).parents[1] / "evaluation/data/intent_cases_500.json"
+        )
+
+        self.assertEqual(len(dataset.intent_cases), 500)
+        self.assertEqual(
+            len({case.expected_intent for case in dataset.intent_cases}),
+            19,
+        )
+
     def test_classification_metrics(self) -> None:
         metrics = classification_metrics(
             ["refund", "technical", "refund"],

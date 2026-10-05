@@ -40,6 +40,7 @@ class EscalationAgent(CustomerServiceAgent):
         supporting_agents: list[str] | None = None,
         routing_reason: str | None = None,
         persist: bool = True,
+        persist_conversation: bool = True,
         **_: object,
     ) -> str:
         """Persist a handoff marker and return a deterministic user message."""
@@ -56,7 +57,7 @@ class EscalationAgent(CustomerServiceAgent):
             intent or "The request was routed to human support."
         )
 
-        if persist and conversation_id and self.memory:
+        if persist and persist_conversation and conversation_id and self.memory:
             await self.memory.add_message(
                 user_id,
                 conversation_id,
@@ -96,7 +97,7 @@ class EscalationAgent(CustomerServiceAgent):
             # Only show non-sensitive structured identifiers that were already extracted.
             response += f" Known request details: {json.dumps(entities, ensure_ascii=False)}."
 
-        if persist and conversation_id and self.memory:
+        if persist and persist_conversation and conversation_id and self.memory:
             await self.memory.add_message(
                 user_id,
                 conversation_id,

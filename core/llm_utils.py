@@ -33,6 +33,12 @@ class LLMToolCall:
     call_id: str
     name: str
     arguments: dict[str, Any]
+    # Opaque provider data that must survive the next request.  Gemini 3
+    # returns its required ``thought_signature`` inside
+    # ``extra_content.google`` in OpenAI-compatible Tool calls; its API
+    # validates that the loop returns the original value.  Other compatible
+    # providers normally omit this field.
+    extra_content: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -205,11 +211,20 @@ class LLMClient:
                 )
                 if not isinstance(arguments, dict):
                     raise ValueError("Tool arguments must be a JSON object")
+                raw_extra_content = raw_call.get("extra_content")
+                if raw_extra_content is not None and not isinstance(
+                    raw_extra_content, dict
+                ):
+                    raise ValueError("Tool extra_content must be an object")
                 calls.append(
                     LLMToolCall(
                         call_id=str(raw_call.get("id") or "tool_call"),
                         name=str(function["name"]),
                         arguments=arguments,
+                        # Keep provider extensions opaque.  In particular, do
+                        # not reinterpret or regenerate Gemini thought
+                        # signatures: the API validates the original value.
+                        extra_content=raw_extra_content,
                     )
                 )
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -234,6 +249,18 @@ class LLMClient:
             )
             response.raise_for_status()
             data = response.json()
+        except httpx.HTTPStatusError as exc:
+            # Providers often put the actionable reason (for example a
+            # missing Gemini thought signature) only in the JSON error body.
+            # Keep it bounded so application logs remain useful and never log
+            # the request headers or API key.
+            detail = exc.response.text.strip().replace("\n", " ")
+            if len(detail) > 1_000:
+                detail = detail[:1_000] + "…"
+            suffix = f": {detail}" if detail else ""
+            raise LLMRequestError(
+                f"LLM request failed: {exc}{suffix}"
+            ) from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise LLMRequestError(f"LLM request failed: {exc}") from exc
         if not isinstance(data, dict):

@@ -1,4 +1,4 @@
-"""Run the dependency-free local Intent/route evaluation dataset."""
+"""Run the local Intent and route evaluation dataset."""
 
 from __future__ import annotations
 
@@ -24,7 +24,13 @@ def _route_without_agent_instances(result: object) -> AgentType:
     return AgentOrchestrator._INTENT_ROUTING.get(intent, AgentType.GENERAL)
 
 
-async def _run(dataset_path: Path, report_path: Path | None, baseline_path: Path | None) -> int:
+async def _run(
+    dataset_path: Path,
+    report_path: Path | None,
+    baseline_path: Path | None,
+    *,
+    verbose: bool = False,
+) -> int:
     dataset = EvaluationDataset.load(dataset_path)
     report = await evaluate_intent_cases(
         dataset.intent_cases,
@@ -53,7 +59,22 @@ async def _run(dataset_path: Path, report_path: Path | None, baseline_path: Path
         )
         output["regression"] = comparison.to_dict()
 
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    if verbose:
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+    else:
+        summary: dict[str, object] = {
+            "dataset": str(dataset_path),
+            "metrics": report.metrics,
+            "counts": report.counts,
+            "failure_count": len(report.failures),
+            "failure_preview": report.failures[:10],
+            "intent_per_class": report.metadata.get("intent_per_class", {}),
+        }
+        if "route_per_class" in report.metadata:
+            summary["route_per_class"] = report.metadata["route_per_class"]
+        if "regression" in output:
+            summary["regression"] = output["regression"]
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
     if baseline_path and not output["regression"]["passed"]:
         return 1
     return 0
@@ -73,12 +94,30 @@ def main() -> int:
     parser.add_argument(
         "--dataset",
         type=Path,
-        default=Path("evaluation/data/cases.json"),
+        default=Path("evaluation/data/intent_cases_500.json"),
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Use the small dependency-free smoke dataset instead of the full set",
     )
     parser.add_argument("--report", type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print every case and failure instead of a compact summary",
+    )
     args = parser.parse_args()
-    return asyncio.run(_run(args.dataset, args.report, args.baseline))
+    dataset_path = Path("evaluation/data/cases.json") if args.smoke else args.dataset
+    return asyncio.run(
+        _run(
+            dataset_path,
+            args.report,
+            args.baseline,
+            verbose=args.verbose,
+        )
+    )
 
 
 if __name__ == "__main__":

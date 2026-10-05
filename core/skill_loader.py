@@ -36,14 +36,25 @@ class SkillDocument:
     agents: tuple[str, ...] = field(default_factory=tuple)    # Allowed Agent names
     enabled: bool = True                           # Runtime availability switch
 
-    def matches(self, message: str, agent_name: str | None = None) -> bool:
-        """Return whether this Skill should be injected for one request."""
+    def matches(
+        self,
+        message: str,
+        agent_name: str | None = None,
+        *,
+        require_keyword_match: bool = True,
+    ) -> bool:
+        """Return whether this Skill may be injected for one request.
+
+        Explicit Skill names selected from a recognized intent already express
+        the scenario decision.  In that case keywords remain useful metadata
+        but must not veto the selected Skill a second time.
+        """
 
         if not self.enabled:
             return False
         if self.agents and agent_name and agent_name.lower() not in self.agents:
             return False
-        if not self.keywords:
+        if not require_keyword_match or not self.keywords:
             return True
         lowered = (message or "").lower()
         return any(keyword.lower() in lowered for keyword in self.keywords)
@@ -173,14 +184,23 @@ class SkillLoader:
         names: list[str] | None = None,
         *,
         max_skills: int | None = None,
+        require_keyword_match: bool = True,
     ) -> list[SkillDocument]:
-        """Select enabled Skills by Agent scope, keywords, and an optional allowlist."""
+        """Select enabled Skills by Agent scope and optional keyword matching.
 
-        candidates = self.load_many(names) if names else self.list_skills()
+        ``names=None`` means discovery across all available Skills.  An empty
+        list means the caller deliberately selected no Skill for this request.
+        """
+
+        candidates = self.load_many(names) if names is not None else self.list_skills()
         selected = [
             document
             for document in candidates
-            if document.matches(query, agent_name)
+            if document.matches(
+                query,
+                agent_name,
+                require_keyword_match=require_keyword_match,
+            )
         ]
         if max_skills is not None:
             return selected[: max(0, max_skills)]

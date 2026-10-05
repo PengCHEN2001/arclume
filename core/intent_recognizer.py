@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from enum import Enum
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -51,6 +51,21 @@ class UrgencyLevel(str, Enum):
     CRITICAL = "critical"
 
 
+InformationNeed = Literal["none", "knowledge", "live_data", "mixed", "action"]
+
+
+class IntentSubtask(BaseModel):
+    """One domain-scoped part of a compound customer request."""
+
+    domain: Literal["general", "technical", "billing"]
+    query: str = Field(min_length=1)
+    intent: IntentCategory
+    information_need: InformationNeed = "none"
+    should_use_rag: bool = False
+    planned_tool_name: str | None = None
+    entities: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class IntentResult(BaseModel):
     """Normalized intent data shared by the Orchestrator and Agents."""
 
@@ -65,6 +80,12 @@ class IntentResult(BaseModel):
     reasoning: str = ""
     latency_ms: float = Field(default=0.0, ge=0.0)
     should_use_rag: bool = False
+    information_need: InformationNeed = "none"
+    planned_tool_name: str | None = None
+    topic_evidence: dict[str, list[str]] = Field(default_factory=dict)
+    ambiguity_reasons: list[str] = Field(default_factory=list)
+    supporting_domains: list[str] | None = None
+    subtasks: list[IntentSubtask] = Field(default_factory=list)
 
 
 _TEMPLATES: dict[IntentCategory, list[str]] = {
@@ -113,6 +134,7 @@ _PATTERNS: dict[IntentCategory, tuple[str, ...]] = {
     ),
     IntentCategory.ORDER_STATUS: (
         "订单状态", "订单有没有发货", "订单处理到哪", "order status", "has my order shipped",
+        "my order", "order #",
     ),
     IntentCategory.LOGISTICS: (
         "物流", "快递", "配送", "运单", "包裹", "包裹什么时候到",
@@ -148,6 +170,7 @@ _PATTERNS: dict[IntentCategory, tuple[str, ...]] = {
     ),
     IntentCategory.QUERY: (
         "?", "？", "怎么", "什么", "如何", "how", "what", "where", "when",
+        "introduce", "tell me about", "feature", "features", "specification", "specifications",
     ),
     IntentCategory.REQUEST: (
         "帮我", "需要", "请协助", "please", "help", "I need", "can you",
@@ -175,20 +198,6 @@ _INTENT_GROUPS: dict[IntentCategory, str] = {
     IntentCategory.HUMAN_HANDOFF: "escalation",
 }
 
-_RAG_INTENTS = {
-    IntentCategory.ORDER_STATUS,
-    IntentCategory.LOGISTICS,
-    IntentCategory.REFUND,
-    IntentCategory.INVOICE,
-    IntentCategory.PAYMENT_ISSUE,
-    IntentCategory.ACCOUNT_SECURITY,
-    IntentCategory.TECHNICAL,
-    IntentCategory.TECHNICAL_LOGIN,
-    IntentCategory.TECHNICAL_CRASH,
-    IntentCategory.BILLING,
-    IntentCategory.ACCOUNT,
-}
-
 _TECHNICAL_INTENTS = {
     IntentCategory.TECHNICAL,
     IntentCategory.TECHNICAL_LOGIN,
@@ -214,6 +223,29 @@ _GENERAL_INTENTS = {
     IntentCategory.LOGISTICS,
     IntentCategory.OTHER,
 }
+
+_TOPIC_INTENTS = _TECHNICAL_INTENTS | _BILLING_INTENTS | {
+    IntentCategory.ORDER_STATUS,
+    IntentCategory.LOGISTICS,
+}
+_WEAK_TOPIC_KEYWORDS = {"return", "account", "profile", "payment", "401", "500"}
+_KNOWLEDGE_CUES = re.compile(
+    r"\b(?:policy|policies|rules?|terms?|eligible|eligibility|how long|how to|"
+    r"what steps|process|procedure|troubleshoot|fix|resolve|why does|introduce|"
+    r"tell me about|features?|specifications?|product details?)\b",
+    re.IGNORECASE,
+)
+_LIVE_DATA_CUES = re.compile(
+    r"\b(?:my order|my package|my shipment|tracking status|order status|"
+    r"delivery status|shipping status|track my|where is my|charged twice|"
+    r"duplicate charge|my refund status)\b",
+    re.IGNORECASE,
+)
+_ACTION_CUES = re.compile(
+    r"\b(?:I want|I need|please|can you)\b.{0,35}\b(?:refund|cancel|change|create)\b",
+    re.IGNORECASE,
+)
+_REFERENCE_ONLY = re.compile(r"\b(?:it|that|this|them)\b", re.IGNORECASE)
 
 _URGENCY_KEYWORDS: dict[UrgencyLevel, tuple[str, ...]] = {
     UrgencyLevel.CRITICAL: (
@@ -264,24 +296,51 @@ class IntentRecognizer:
         self.cache_misses += 1
 
         started = time.monotonic()
-        pattern_scores = self._pattern_scores(cleaned)
+        evidence = self._pattern_evidence(cleaned)
+        pattern_scores = self._scores_from_evidence(evidence)
+        strong_topics = self._strong_topics(evidence)
         pattern_intent, pattern_confidence = self._best_match(pattern_scores)
-        embedding_intent, embedding_confidence = self._embedding_match(cleaned)
+        if strong_topics and pattern_intent not in {
+            IntentCategory.HUMAN_HANDOFF, IntentCategory.ESCALATION,
+        }:
+            # Question words describe speech act, not the business topic.
+            pattern_intent, pattern_confidence = self._best_match(
+                {intent: pattern_scores[intent] for intent in evidence if intent in strong_topics}
+            )
+        template_intent, template_confidence, template_margin = self._template_match(cleaned)
+        if (
+            not strong_topics
+            and template_intent in _TOPIC_INTENTS
+            and template_confidence >= 0.75
+            and template_margin >= 0.15
+            and pattern_intent in {IntentCategory.QUERY, IntentCategory.REQUEST, IntentCategory.OTHER}
+        ):
+            # A strong example match can recover a topic when only generic
+            # question/request words were recognized locally.
+            pattern_intent = IntentCategory.OTHER
+        ambiguity_reasons = self._ambiguity_reasons(
+            cleaned, evidence, strong_topics, template_intent,
+            template_confidence, template_margin,
+        )
 
         llm_result: dict[str, Any] = {}
         # The local path is the default so intent routing does not double model cost.
-        if self.use_llm and self.llm is not None and pattern_confidence < 0.75:
+        if self.use_llm and self.llm is not None and ambiguity_reasons:
             llm_result = await self._llm_match(cleaned, history)
 
         intent, confidence, reasoning = self._fuse(
             pattern_intent,
             pattern_confidence,
-            embedding_intent,
-            embedding_confidence,
+            template_intent,
+            template_confidence,
             llm_result,
         )
         entities = self._extract_entities(cleaned)
         urgency = self._detect_urgency(cleaned, intent)
+        information_need = self._information_need(cleaned, intent, strong_topics)
+        planned_tool_name = self._planned_tool(intent, information_need, entities)
+        supporting_domains = self._independent_domains(cleaned, strong_topics)
+        subtasks = self._build_subtasks(cleaned, intent, supporting_domains)
         result = IntentResult(
             intent=intent,
             intent_group=_INTENT_GROUPS.get(intent, intent.value),
@@ -290,14 +349,20 @@ class IntentRecognizer:
             entities=entities,
             source_scores={
                 "pattern": round(pattern_confidence, 3),
-                "embedding": round(embedding_confidence, 3),
+                "template": round(template_confidence, 3),
                 "llm": round(float(llm_result.get("confidence", 0.0) or 0.0), 3),
             },
             domain_scores=self._domain_scores(pattern_scores, intent),
             matched_intents=self._matched_intents(pattern_scores),
             reasoning=reasoning,
             latency_ms=(time.monotonic() - started) * 1000,
-            should_use_rag=intent in _RAG_INTENTS,
+            should_use_rag=information_need in {"knowledge", "mixed"},
+            information_need=information_need,
+            planned_tool_name=planned_tool_name,
+            topic_evidence={intent.value: hits for intent, hits in evidence.items() if intent in _TOPIC_INTENTS},
+            ambiguity_reasons=ambiguity_reasons,
+            supporting_domains=supporting_domains,
+            subtasks=subtasks,
         )
         self._remember(cache_key, result)
         return result
@@ -342,28 +407,247 @@ class IntentRecognizer:
     def _pattern_scores(self, message: str) -> dict[IntentCategory, float]:
         """Score all matching patterns so compound requests retain both domains."""
 
+        return self._scores_from_evidence(self._pattern_evidence(message))
+
+    @staticmethod
+    def _pattern_evidence(message: str) -> dict[IntentCategory, list[str]]:
+        """Keep the matched phrases, not only their uncalibrated scores."""
+
         lowered = message.lower()
-        scores: dict[IntentCategory, float] = {}
+        evidence: dict[IntentCategory, list[str]] = {}
         for intent, keywords in _PATTERNS.items():
-            hits = sum(1 for keyword in keywords if keyword.lower() in lowered)
+            hits = [keyword for keyword in keywords if IntentRecognizer._keyword_matches(lowered, keyword)]
             if hits:
-                scores[intent] = min(1.0, 0.5 + 0.2 * (hits - 1))
+                evidence[intent] = hits
+        return evidence
+
+    @staticmethod
+    def _keyword_matches(lowered: str, keyword: str) -> bool:
+        value = keyword.lower()
+        if value.isascii() and any(char.isalpha() for char in value):
+            suffix = r"(?![a-z0-9])" if value[-1].isalnum() else ""
+            return re.search(r"(?<![a-z0-9])" + re.escape(value) + suffix, lowered) is not None
+        return value in lowered
+
+    @staticmethod
+    def _scores_from_evidence(evidence: dict[IntentCategory, list[str]]) -> dict[IntentCategory, float]:
+        scores: dict[IntentCategory, float] = {}
+        for intent, hits in evidence.items():
+            scores[intent] = min(1.0, 0.5 + 0.2 * (len(hits) - 1))
         return scores
 
-    def _embedding_match(self, message: str) -> tuple[IntentCategory, float]:
-        """Use a deterministic character n-gram similarity fallback without new services."""
+    def _template_match(self, message: str) -> tuple[IntentCategory, float, float]:
+        """Compare against preset example questions using local character n-grams."""
 
         message_vector = self._vectorize(message)
-        best_intent = IntentCategory.OTHER
-        best_score = 0.0
+        scores: list[tuple[IntentCategory, float]] = []
         for intent, examples in self._learned_templates.items():
             score = max(
                 self._cosine(message_vector, self._vectorize(example))
                 for example in examples
             )
-            if score > best_score:
-                best_intent, best_score = intent, score
-        return best_intent, max(0.0, min(1.0, best_score))
+            scores.append((intent, max(0.0, min(1.0, score))))
+        scores.sort(key=lambda item: item[1], reverse=True)
+        best_intent, best_score = scores[0]
+        second_score = scores[1][1] if len(scores) > 1 else 0.0
+        return best_intent, best_score, best_score - second_score
+
+    @staticmethod
+    def _strong_topics(evidence: dict[IntentCategory, list[str]]) -> set[IntentCategory]:
+        return {
+            intent for intent, hits in evidence.items()
+            if intent in _TOPIC_INTENTS
+            and any(hit.lower() not in _WEAK_TOPIC_KEYWORDS for hit in hits)
+        }
+
+    def _ambiguity_reasons(
+        self,
+        message: str,
+        evidence: dict[IntentCategory, list[str]],
+        strong_topics: set[IntentCategory],
+        template_intent: IntentCategory,
+        template_confidence: float,
+        template_margin: float,
+    ) -> list[str]:
+        """Request model review only when local evidence cannot settle the topic."""
+
+        if IntentCategory.HUMAN_HANDOFF in evidence or IntentCategory.ESCALATION in evidence:
+            return []
+        strong_domains = {self._domain_for(intent) for intent in strong_topics}
+        strong_domains.discard(None)
+        if len(strong_domains) > 1:
+            return [] if self._independent_domains(message, strong_topics) else ["overlapping_domains"]
+        if strong_topics:
+            return []
+        weak_topics = [intent for intent in evidence if intent in _TOPIC_INTENTS]
+        if weak_topics:
+            return ["weak_or_ambiguous_keyword"]
+        if template_intent not in _TOPIC_INTENTS and (
+            IntentCategory.GREETING in evidence or IntentCategory.FEEDBACK in evidence
+        ):
+            return []
+        if template_intent in _TOPIC_INTENTS and template_confidence >= 0.75 and template_margin >= 0.15:
+            return []
+        if _REFERENCE_ONLY.search(message) or IntentCategory.QUERY in evidence or IntentCategory.REQUEST in evidence:
+            return ["no_reliable_business_topic"]
+        return []
+
+    @staticmethod
+    def _domain_for(intent: IntentCategory) -> str | None:
+        if intent in _TECHNICAL_INTENTS:
+            return "technical"
+        if intent in _BILLING_INTENTS:
+            return "billing"
+        if intent in {IntentCategory.ORDER_STATUS, IntentCategory.LOGISTICS}:
+            return "general"
+        return None
+
+    def _independent_domains(self, message: str, strong_topics: set[IntentCategory]) -> list[str]:
+        """Require separate clauses before treating two domain hits as two issues."""
+
+        domains = {self._domain_for(intent) for intent in strong_topics}
+        domains.discard(None)
+        if len(domains) < 2:
+            return []
+        clauses = re.split(r"[,;]|\b(?:and|also|plus|but)\b", message, flags=re.IGNORECASE)
+        clause_domains = [
+            {
+                domain
+                for intent in self._strong_topics(self._pattern_evidence(clause))
+                if (domain := self._domain_for(intent)) is not None
+            }
+            for clause in clauses
+        ]
+        independent = any(
+            left - right and right - left
+            for index, left in enumerate(clause_domains)
+            for right in clause_domains[index + 1 :]
+        )
+        return sorted(domains) if independent else []
+
+    def _build_subtasks(
+        self,
+        message: str,
+        final_intent: IntentCategory,
+        supporting_domains: list[str],
+    ) -> list[IntentSubtask]:
+        """Assign independent clauses to domain Agents without another model call.
+
+        A single-domain request remains intact. Compound requests are split only
+        after `_independent_domains` has found separate domain evidence, avoiding
+        broad sentence splitting for ordinary messages.
+        """
+
+        if not supporting_domains:
+            domain = self._domain_for(final_intent) or "general"
+            evidence = self._pattern_evidence(message)
+            strong_topics = self._strong_topics(evidence)
+            entities = self._extract_entities(message)
+            information_need = self._information_need(message, final_intent, strong_topics)
+            return [IntentSubtask(
+                domain=domain,
+                query=message.strip(),
+                intent=final_intent,
+                information_need=information_need,
+                should_use_rag=information_need in {"knowledge", "mixed"},
+                planned_tool_name=self._planned_tool(final_intent, information_need, entities),
+                entities=entities,
+            )]
+
+        clauses = [
+            clause.strip()
+            for clause in re.split(
+                r"\s*(?:[,;]+|\b(?:and|also|plus|but)\b)\s*",
+                message,
+                flags=re.IGNORECASE,
+            )
+            if clause.strip()
+        ]
+        grouped: dict[str, list[str]] = {}
+        for clause in clauses:
+            clause_evidence = self._pattern_evidence(clause)
+            clause_topics = self._strong_topics(clause_evidence)
+            clause_scores = self._scores_from_evidence(clause_evidence)
+            topic_scores = {
+                intent: score
+                for intent, score in clause_scores.items()
+                if intent in clause_topics
+            }
+            clause_intent, _ = self._best_match(topic_scores)
+            domain = self._domain_for(clause_intent)
+            if domain is None:
+                # General owns independent product and routine-information clauses
+                # that do not match a specialist domain.
+                domain = "general"
+            grouped.setdefault(domain, []).append(clause)
+
+        subtasks: list[IntentSubtask] = []
+        for domain, domain_clauses in grouped.items():
+            query = " ".join(domain_clauses).strip()
+            evidence = self._pattern_evidence(query)
+            strong_topics = self._strong_topics(evidence)
+            scores = {
+                intent: score
+                for intent, score in self._scores_from_evidence(evidence).items()
+                if self._domain_for(intent) == domain
+            }
+            task_intent, _ = self._best_match(scores)
+            if task_intent == IntentCategory.OTHER:
+                if self._domain_for(final_intent) == domain:
+                    task_intent = final_intent
+                else:
+                    task_intent = {
+                        "technical": IntentCategory.TECHNICAL,
+                        "billing": IntentCategory.BILLING,
+                    }.get(domain, IntentCategory.QUERY)
+            entities = self._extract_entities(query)
+            information_need = self._information_need(query, task_intent, strong_topics)
+            subtasks.append(IntentSubtask(
+                domain=domain,
+                query=query,
+                intent=task_intent,
+                information_need=information_need,
+                should_use_rag=information_need in {"knowledge", "mixed"},
+                planned_tool_name=self._planned_tool(task_intent, information_need, entities),
+                entities=entities,
+            ))
+        return subtasks
+
+    @staticmethod
+    def _information_need(
+        message: str,
+        intent: IntentCategory,
+        strong_topics: set[IntentCategory],
+    ) -> InformationNeed:
+        if intent in {IntentCategory.HUMAN_HANDOFF, IntentCategory.ESCALATION,
+                      IntentCategory.GREETING, IntentCategory.FEEDBACK, IntentCategory.COMPLAINT}:
+            return "none"
+        live_data = bool(_LIVE_DATA_CUES.search(message))
+        requests_action = bool(_ACTION_CUES.search(message))
+        knowledge = bool(_KNOWLEDGE_CUES.search(message)) or bool(
+            (strong_topics | {intent}) & (_TECHNICAL_INTENTS | {IntentCategory.ACCOUNT_SECURITY})
+        ) or (intent == IntentCategory.REFUND and not requests_action)
+        if live_data and knowledge:
+            return "mixed"
+        if live_data:
+            return "live_data"
+        if knowledge:
+            return "knowledge"
+        if requests_action:
+            return "action"
+        if intent in {IntentCategory.PAYMENT_ISSUE, IntentCategory.INVOICE}:
+            return "live_data"
+        return "none"
+
+    @staticmethod
+    def _planned_tool(intent: IntentCategory, need: str, entities: dict[str, list[str]]) -> str | None:
+        if need not in {"live_data", "mixed"}:
+            return None
+        if intent == IntentCategory.ORDER_STATUS and entities.get("order_id"):
+            return "order_query"
+        if intent == IntentCategory.LOGISTICS and entities.get("tracking_id"):
+            return "logistics_query"
+        return None
 
     async def _llm_match(
         self,

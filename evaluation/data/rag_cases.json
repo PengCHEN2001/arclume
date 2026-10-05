@@ -1,0 +1,121 @@
+{
+  "dataset_name": "rag-smoke-v3",
+  "description": "Small labeled retrieval set for the nine English documents in the fictional Arclume demo store.",
+  "notes": "Chunk IDs match the current heading/paragraph-first chunker with default size 500 and overlap 50. Use a fresh isolated ChromaDB index; rebuild labels if documents or chunking settings change. Product, warranty, and payment data are fictional.",
+  "intent_cases": [],
+  "dialog_cases": [],
+  "retrieval_cases": [
+    {
+      "case_id": "refund-001",
+      "query": "How long do I have to request a refund?",
+      "relevant_chunk_ids": ["3bb8ef694d0269d26e6599cb1c302291a613016148ee6a851477b834c59d604d"],
+      "top_k": 3
+    },
+    {
+      "case_id": "refund-002",
+      "query": "When will an approved refund return to my payment account?",
+      "relevant_chunk_ids": ["3bb8ef694d0269d26e6599cb1c302291a613016148ee6a851477b834c59d604d"],
+      "top_k": 3
+    },
+    {
+      "case_id": "refund-003",
+      "query": "Can I get a refund after my order has shipped?",
+      "relevant_chunk_ids": ["3bb8ef694d0269d26e6599cb1c302291a613016148ee6a851477b834c59d604d"],
+      "top_k": 3
+    },
+    {
+      "case_id": "shipping-001",
+      "query": "How long does standard shipping take?",
+      "relevant_chunk_ids": ["dd4e9ce183d8f86224436d511ed95235e108065985cfe363d4e06320a78dc09d"],
+      "top_k": 3
+    },
+    {
+      "case_id": "shipping-002",
+      "query": "What is the price of express delivery?",
+      "relevant_chunk_ids": ["dd4e9ce183d8f86224436d511ed95235e108065985cfe363d4e06320a78dc09d"],
+      "top_k": 3
+    },
+    {
+      "case_id": "shipping-003",
+      "query": "Can I change the address after dispatch?",
+      "relevant_chunk_ids": ["a48f1722eb0015087f1d69947fbdfd5069ab9cb75713b9f22e6e4784dde46426"],
+      "top_k": 3
+    },
+    {
+      "case_id": "technical-001",
+      "query": "What should I do if the application crashes?",
+      "relevant_chunk_ids": ["ddc80c00ac759e7462e2666069a456720bdc78be8d252982eb7b29903cb19285"],
+      "top_k": 3
+    },
+    {
+      "case_id": "technical-002",
+      "query": "What does a 401 login error mean?",
+      "relevant_chunk_ids": ["ddc80c00ac759e7462e2666069a456720bdc78be8d252982eb7b29903cb19285"],
+      "top_k": 3
+    },
+    {
+      "case_id": "technical-003",
+      "query": "How can I troubleshoot slow pages?",
+      "relevant_chunk_ids": ["ddc80c00ac759e7462e2666069a456720bdc78be8d252982eb7b29903cb19285"],
+      "top_k": 3
+    },
+    {
+      "case_id": "security-001",
+      "query": "How many characters should my password contain?",
+      "relevant_chunk_ids": ["8971bf308c8b638282d2da359815afee790c347bf879161df70202b1c1bb2296"],
+      "top_k": 3
+    },
+    {
+      "case_id": "security-002",
+      "query": "What happens after unusual login activity?",
+      "relevant_chunk_ids": ["8971bf308c8b638282d2da359815afee790c347bf879161df70202b1c1bb2296"],
+      "top_k": 3
+    },
+    {
+      "case_id": "security-003",
+      "query": "Will support ask me for my password?",
+      "relevant_chunk_ids": ["8971bf308c8b638282d2da359815afee790c347bf879161df70202b1c1bb2296"],
+      "top_k": 3
+    },
+    {
+      "case_id": "mini-app-001",
+      "query": "Can the AL-M100 Mini lamp use schedules in the mobile app?",
+      "relevant_chunk_ids": ["62f80758a0320b144da59f9a95bb24a3d1e191fff3eb53630b9884d97518b126"],
+      "top_k": 3
+    },
+    {
+      "case_id": "pro-network-001",
+      "query": "Will the AL-P200 Pro lamp pair with a 5 GHz-only Wi-Fi network?",
+      "relevant_chunk_ids": ["2a6c34d7153d53e32b741c47a97b4d62388e0c71a9184cbacc4f4db78268555f"],
+      "top_k": 3
+    },
+    {
+      "case_id": "pro-signin-001",
+      "query": "I get a 401 error before pairing my Pro lamp. Is the Wi-Fi faulty?",
+      "relevant_chunk_ids": ["a202172f79d4a3ba3b7109a76ee74c057c5f53e8026cb9fc3e6f8b9cbe8db8c8"],
+      "top_k": 3
+    },
+    {
+      "case_id": "warranty-liquid-001",
+      "query": "Does the lamp warranty cover accidental liquid damage?",
+      "relevant_chunk_ids": ["d3a043ec7e3e2176a708201411dcca49b5498b680da7e8ceda7ca94ea6f58431"],
+      "top_k": 3
+    },
+    {
+      "case_id": "payment-duplicate-001",
+      "query": "Do two entries on my bank statement prove that I was charged twice?",
+      "relevant_chunk_ids": ["7ded415e7bee186883b4889c2fcf615fa25178c29c92df7e95bcc120bb8d41ad"],
+      "top_k": 3
+    },
+    {
+      "case_id": "warranty-versus-refund-001",
+      "query": "My lamp failed after two months. Is a warranty claim the same as a seven-day refund?",
+      "relevant_chunk_ids": [
+        "ee7392b3c1e4e0e542807982cd0cf9495dc4afad31e7f9ebf2f5b06c8f2e06ef",
+        "087d5b1ea234464ad796af0e246a2ae1a75b7979694ba5d2b81afb218e1d9967",
+        "3bb8ef694d0269d26e6599cb1c302291a613016148ee6a851477b834c59d604d"
+      ],
+      "top_k": 5
+    }
+  ]
+}

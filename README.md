@@ -1,190 +1,184 @@
-# Arclume
+# Arclume: understand, gather evidence, then answer
 
-Arclume is a customer-support Agent system designed to grow from a small,
-understandable runtime into an industrial-grade orchestration platform.
+**English** · [Français](docs/fr/README_fr.md) · [中文](docs/zh/README_zh.md)
 
-## Current stage
+Arclume is a multi-agent backend prototype for **English-language customer support**. A real customer may mention several independent issues in one message, then use a short follow-up that depends on the earlier context. The system therefore does more than generate fluent text: it identifies the issues, decides who should handle them, gathers evidence when needed, controls tool use, and keeps the request observable.
 
-The seventeenth stage closes the backend integration surface on top of
-metadata-driven Skills, complete request tracing, Hybrid RAG, layered Memory,
-governed Tool execution, monitoring, Evaluation, and the structured
-multi-Agent runtime:
-
-- FastAPI provides the HTTP boundary.
-- Pydantic validates incoming and outgoing data.
-- A small asynchronous LLM client provides model transport.
-- `schemas/` defines shared API, state, context, and tool models.
-- `harness/` separates policy decisions, Tool execution, tracing, and the
-  model-independent Agent loop skeleton.
-- `harness/trace.py` records request, routing, Skill, RAG, Agent, Tool, Memory,
-  and response events with bounded in-memory retention.
-- `agents/customer_service_agent.py` provides shared execution logic for domain
-  Agents, renders each AgentProfile, and supports a bounded model Tool loop.
-- `agents/agent_profile.py` defines each Agent's role, mission, workflow,
-  contracts, handoff conditions, and Tool scope.
-- `agents/general_agent.py`, `agents/technical_agent.py`, and
-  `agents/billing_agent.py` provide the three executable domain Agents.
-- `agents/escalation_agent.py` provides a deterministic human-handoff node.
-- `agents/response_composer.py` combines primary and supporting Agent results
-  without an extra model call.
-- `core/intent_recognizer.py` produces fine-grained intent, entities, urgency,
-  confidence, domain scores, and the RAG decision. Local recognition is the
-  default; an optional refinement LLM call is controlled by
-  `ARCLUME_INTENT_LLM_ENABLED`. Human-corrected examples can be added through
-  `IntentRecognizer.learn()` without changing the main request path.
-- `agents/agent_orchestrator.py` selects the primary Agent, can run a technical
-  and billing Agent in parallel for compound requests, handles clarification,
-  records per-Agent performance, accepts Monitor routing penalties, exposes
-  request-level Tool information, and falls back to the General Agent.
-- `core/context_builder.py` assembles the temporary model context from the
-  current message, recent history, session summary, episodic memory, user
-  profile, AgentState, and retrieved evidence.
-- `memory/conversation_memory.py` stores Redis working memory and session
-  summaries, compacts older messages, and coordinates long-term memory reads.
-- `memory/long_term_memory.py` stores episodic summaries and user profiles in
-  separate ChromaDB collections.
-- `memory/state_store.py` keeps active-case `AgentState` records in Redis; State
-  remains separate from conversation memory.
-- `tests/test_memory.py` verifies Memory compression, long-term recall, and the
-  Redis/ChromaDB failure boundary without external services.
-- `knowledge/knowledge_base.py` indexes document chunks in ChromaDB and returns
-  semantic search results for one request.
-- `knowledge/bm25_index.py` builds a dependency-free lexical index over the same
-  knowledge chunks.
-- `knowledge/hybrid_retriever.py` runs dense and BM25 recall in parallel and
-  combines their ranked results with Reciprocal Rank Fusion.
-- `data/demo_docs/` contains small English policy documents for local RAG tests.
-- `core/skill_loader.py` loads human-authored Markdown Skills, parses metadata,
-  filters by Agent and keywords, supports SKILL.md/Markdown/text/JSON inputs,
-  enforces a bounded prompt budget, and supports mtime-aware hot reload.
-- `monitor/performance_monitor.py` collects Agent and Tool metrics, detects
-  threshold violations and unusual changes, records alerts and suggestions,
-  and feeds bounded routing penalties back to the Orchestrator.
-- `skills/` contains metadata-driven refund, logistics, technical, and
-  human-escalation instructions.
-- `tools/tool_functions.py` contains the current Tool functions and registers
-  them in the shared Harness Executor.
-- `tools/tool_manager.py` coordinates query rewriting, parallel recall,
-  BM25 and dense retrieval, RRF fusion, deduplication, reranking, TTL caching,
-  circuit breaking, fallback, and Tool statistics.
-- `core/llm_utils.py` can parse OpenAI-compatible function calls, while the
-  Harness remains responsible for Tool authorization and execution.
-- The `/chat` endpoint now runs intent recognition and orchestration before the
-  selected Agent builds Context. RAG is skipped for greetings, feedback, and
-  explicit human handoff requests, and is enabled for business intents.
-- The selected Agent receives only the Skill relevant to the detected domain.
-- The knowledge retrieval path now passes through the low-risk Harness Tool
-  boundary and supports bounded query variants, parallel dense and BM25 recall,
-  RRF fusion, deduplication, and local or optional model reranking.
-- `/knowledge/search`, `/knowledge/stats`, and `/tools/stats` provide model-free
-  retrieval and reliability checks. `POST /search` is an equivalent retrieval
-  entry point, while `POST /knowledge/add` and `POST /knowledge/upload` provide
-  small-batch document ingestion and refresh the lexical index.
-- `/skills` lists Skill metadata and `/skills/reload` reloads edited Skill files.
-- `/traces/{request_id}` exposes the retained request-level execution trace.
-- `/trace/tool/{request_id}` and `/trace/tools` expose Tool-focused trace views.
-- `/monitor` exposes Agent/Tool health, active alerts, and suggestions.
-- `/metrics` exposes Prometheus-compatible metrics without requiring a model call.
-- `evaluation/` provides dependency-free Intent, routing, and retrieval metrics,
-  per-class Precision/Recall/F1, end-to-end reports, baseline regression checks,
-  and an optional LLM Judge adapter.
-- `POST /eval/run` runs the Intent and single-/multi-turn dialog Evaluation
-  suite. It requires the same runtime dependencies as `/chat` for the end-to-end
-  Agent cases.
-- Order and logistics Tools currently return deterministic mock data. Ticket
-  creation is marked high risk and stops for approval.
-- The current Agent Tool loop is bounded and only runs when the configured provider
-  supports compatible function calling; otherwise the text path remains active.
-- Evaluation does not modify the live system. Automatic Skill generation,
-  modification, publication, and rollback remain intentionally disabled.
-- CORS is configurable through `ARCLUME_CORS_ORIGINS`; the development default
-  is permissive and should be restricted before production deployment.
-
-## Python environment
-
-The project uses a local Python 3.10 virtual environment:
-
-```bash
-python3.10 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+```text
+understand the request
+→ make a handling plan
+→ retrieve evidence when needed
+→ let Agents cooperate
+→ generate a reply
+→ save and trace the final result
 ```
 
-## Configuration
+> Arclume is a personal learning and engineering project. The current version deliberately does not use high-level Agent frameworks such as LangChain or LangGraph. These frameworks can speed up prototyping, but they can also hide state flow, orchestration, tool calls, and failure handling.
+>
+> This version implements intent recognition, routing, Context building, the Tool Call Loop, Memory, and Trace explicitly in Python. A later LangChain / LangGraph version will compare development speed, observability, debugging, and maintenance cost.
+>
+> AI coding tools assisted implementation, refactoring, and tests. The project is still a prototype and is not presented as a production support system.
 
-Create a local environment file and fill in a model provider that exposes an
-OpenAI-compatible chat-completions endpoint:
+## Repository layout
+
+```text
+arclume/
+├── api/                 FastAPI routes, startup, and shared component setup
+├── agents/              Agent routing, profiles, execution, and reply composition
+├── core/                intent recognition, LLM client, Skills, and Context building
+├── memory/              Redis conversation memory, ChromaDB long-term memory, state
+├── knowledge/           document chunking, vector retrieval, and BM25 retrieval
+├── tools/               concrete tool capabilities
+├── harness/             tool permissions, validation, risk checks, execution, Trace
+├── frontend/            optional Vue/Vite chat interface
+├── data/                demo knowledge documents and generated local data
+├── docs/                project, design, code, and evaluation documentation
+├── evaluation/          offline cases, metrics, and reports
+├── tests/               regression tests without real external services
+├── config/              Prometheus and Nginx configuration
+├── requirements.txt     Python dependencies
+├── docker-compose.yml   local API, Redis, ChromaDB, and Prometheus setup
+└── Dockerfile           API image build instructions
+```
+## Other Documentation
+
+*(English versions are not available yet.Here are the french versions)*
+
+- [Product Requirements Document (PRD)](docs/fr/PRD_fr.md): target users, problem definition, scope of the first version, key requirements, acceptance criteria, and assumptions to validate.
+- [Project Design and End-to-End Request Flow](docs/fr/project_design_and_request_flow_fr.md): request flow, design of each layer, and the main technical trade-offs.
+- [Code Structure and Implementation Guide](docs/fr/code_guide_fr.md): directory structure, main files, classes and functions, configuration, and entry points for modifications.
+- [Evaluation Framework and Running Guide](docs/fr/evaluation_protocol_fr.md): datasets, metrics, execution commands, and limitations of the evaluation results.
+- [Roadmap](docs/fr/roadmap_fr.md): validation checklist before publicly presenting the project and directions for future iterations.
+
+## What it handles
+
+For `I cannot log in and I was charged twice.`, Arclume finds two independent issues. It can select Technical and Billing Agents, give each one its own subtask, then merge their replies. The next turn reads the final merged answer, not only one Agent's draft.
+
+A policy or product question can retrieve support knowledge first. An order or tracking request with an identifier may use an allowed read-only business tool. When required information is missing, the system asks the user to provide it. A direct request for a human follows a deterministic handoff path.
+
+These mechanisms do **not** mean the prototype can verify a real payment record or contact a real support team.
+
+| Concern | Arclume approach |
+| --- | --- |
+| Several issues in one message | Identifies domains and creates subtasks; primary and supporting Agents only answer their assigned part before results are merged. |
+| Evidence for an answer | Separates policy/troubleshooting knowledge from current business data; retrieved chunks are added to Agent Context. |
+| Follow-up messages | Redis stores recent messages, summaries, and processing state; ChromaDB stores long-term summaries and user profiles. |
+| Model tool calls | AgentProfile limits roles and tool scope; the Harness checks parameters and risk, executes calls, and records Trace. |
+| Diagnosis | `request_id` links intent, routing, retrieval, and tool events; offline evaluation checks layers separately. |
+
+## Request flow
+
+```text
+POST /chat
+  → read conversation memory
+  → recognize intent and evidence needs
+  → route to one Agent, multiple Agents, a request for missing information, or handoff
+  → retrieve knowledge or call an allowed tool when needed
+  → generate and merge replies
+  → save the final user-visible turn and return ChatResponse
+```
+
+The main implementation is in `api/`, `core/`, `agents/`, `memory/`, `knowledge/`, `tools/`, and `harness/`. FastAPI exposes an interactive API reference at `/docs` once the service is running.
+
+## Quick start
+
+Arclume needs a Chat model endpoint, Redis, ChromaDB, and the API. The Vue web interface is optional. Runtime secrets belong in a local `.env` file in the repository root. Do not commit `.env`, even after removing personal values; the repository only includes `.env.example` with placeholder values.
+
+Copy the template, then edit `.env` with your own provider and API key:
 
 ```bash
 cp .env.example .env
 ```
 
-The `.env` file is ignored by Git. Never place a real API key in
-`.env.example`.
+At minimum, check these values:
 
-## Run locally
-
-```bash
-python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+```dotenv
+LLM_API_KEY=your-api-key
+LLM_BASE_URL=https://your-provider.example/v1
+LLM_MODEL=your-chat-model
+REDIS_PASSWORD=arclume123
+ARCLUME_INTENT_LLM_ENABLED=false
+ARCLUME_RAG_LLM_ENABLED=false
+ARCLUME_MEMORY_LLM_ENABLED=false
 ```
 
-Useful endpoints:
+The optional switches avoid extra LLM calls for intent review, RAG rewrite/rerank, and memory extraction. A normal Agent reply still calls the configured Chat model. Never commit a real API key.
 
-- `GET /health` — process and configuration status.
-- `POST /chat` — single-Agent customer-service request with Redis persistence.
-- `GET /knowledge/search` — semantic search without calling the model.
-- `POST /search` — retrieval pipeline entry point with query parameters.
-- `POST /knowledge/add` — add a batch of Markdown-like text documents as JSON.
-- `POST /knowledge/upload` — upload one `.md`, `.txt`, or `.json` knowledge file.
-- `GET /knowledge/stats` — indexed knowledge chunk count.
-- `GET /trace/tool/{request_id}` — Tool events for one request.
-- `GET /trace/tools` — recent requests that emitted Tool events.
-- `GET /monitor` — Agent/Tool health, alerts, and operational suggestions.
-- `GET /metrics` — Prometheus-compatible runtime metrics.
-- `GET /docs` — interactive API documentation.
+### Docker Compose
 
-The service can start without a model key so the HTTP layer can be inspected.
-The chat endpoint requires `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, and a
-reachable Redis instance.
-
-## Run infrastructure and the API with Docker
+With Docker Desktop running, start the complete local stack:
 
 ```bash
-docker compose up -d --build
+docker compose up -d --build api
 docker compose ps
-docker compose logs -f api
 ```
 
-The compose stack also includes Prometheus on port 9090 and Nginx on port 80.
-They are not required for local Python development.
+Compose starts Redis and ChromaDB before the API. Inspect failures with `docker compose logs api`.
 
-The current application uses Redis for working memory, session summaries, and
-AgentState. ChromaDB stores the knowledge base, episodic summaries, and user
-profiles in separate collections. Memory compression uses a local factual
-fallback by default; set `ARCLUME_MEMORY_LLM_ENABLED=true` only when the extra
-summary and profile-extraction model calls are desired. The application can
-continue with Redis-only memory while ChromaDB is unavailable. RAG uses both a
-ChromaDB dense branch and an in-process BM25 branch by default; set
-`ARCLUME_RAG_BM25_ENABLED=false` to compare dense-only retrieval. Redis is a core
-chat dependency: if its working-memory read or write fails, `/chat` returns
-`503` instead of silently pretending that no history exists.
+### Without Docker
 
-Run the dependency-free Memory tests with:
+Install Python dependencies and run Redis locally:
 
 ```bash
-python -m unittest discover -s tests -p 'test_*.py' -v
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+brew install redis  # macOS, if Redis is not installed
+redis-server --port 6379 --requirepass arclume123 --save '' --appendonly no
 ```
 
-Run the local Intent and routing Evaluation without a model call:
+In another terminal, add these values to `.env` and start the API:
+
+```dotenv
+REDIS_URL=redis://:arclume123@127.0.0.1:6379/0
+CHROMA_HOST=127.0.0.1
+CHROMA_PORT=8001
+CHROMA_ALLOW_LOCAL_FALLBACK=true
+CHROMA_PERSIST_DIRECTORY=./data/chroma
+```
 
 ```bash
-./.venv/bin/python -m evaluation \
-  --report evaluation/baselines/local-intent-routing.json
+source .venv/bin/activate
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Run the integrated Evaluation after starting the API:
+If no ChromaDB server is available, the API uses local persistent mode in `data/chroma/`. When the knowledge collection is empty, startup imports `data/demo_docs/`, creates chunks and embeddings, writes ChromaDB, and builds BM25. The first embedding-model download may require internet access but does not consume Chat-model tokens.
+
+## Check the service
 
 ```bash
-curl -X POST http://127.0.0.1:8000/eval/run
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/knowledge/stats
+curl -X POST http://127.0.0.1:8000/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"What is the refund policy?","user_id":"demo-user"}'
 ```
+
+Reuse the returned `conversation_id` for follow-up turns. Use `request_id` to inspect Trace:
+
+```bash
+curl http://127.0.0.1:8000/traces/your-request-id
+```
+
+Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for all API endpoints. For the web UI:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Then open `http://127.0.0.1:5173`.
+
+## Verification and limits
+
+These checks do **not** call a Chat model:
+
+```bash
+python -m unittest discover -s tests -q
+python -m evaluation --smoke
+python -m evaluation
+```
+
+They test code behavior and intent/routing behavior on an LLM-generated synthetic English dataset. They do not prove real customer-support quality. Order and logistics tools use demo data; handoff does not contact a real human team; high-risk tool policy has no complete approval-and-resume workflow in `/chat`; Traces are stored in process memory; production authentication, privacy, and data-governance controls are not implemented.
+

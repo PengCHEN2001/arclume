@@ -78,8 +78,18 @@ class EvalDialogCaseInput(BaseModel):
     reference_answer: str | None = None
 
 
+class EvalRetrievalCaseInput(BaseModel):
+    """One labeled query used to evaluate live RAG retrieval."""
+
+    case_id: str = Field(min_length=1)
+    query: str = Field(min_length=1)
+    relevant_chunk_ids: list[str] = Field(min_length=1)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
 class EvalRunInput(BaseModel):
     """Optional custom cases accepted by ``POST /eval/run``."""
 
     intent_cases: list[EvalIntentCaseInput] | None = None
     dialog_cases: list[EvalDialogCaseInput] | None = None
+    retrieval_cases: list[EvalRetrievalCaseInput] | None = None

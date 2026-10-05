@@ -1,0 +1,3008 @@
+{
+  "dataset_name": "llm-generated-intent-500-v1",
+  "description": "A balanced LLM-generated synthetic dataset covering all 19 supported intent categories.",
+  "notes": "The examples and expected labels have not yet become an independently human-reviewed test set. Review and expand them with production-like paraphrases before quoting public performance metrics.",
+  "intent_cases": [
+    {
+      "case_id": "greeting-001",
+      "message": "Hello, is anyone available today?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-002",
+      "message": "Hello, is anyone available right now?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-003",
+      "message": "Hello, is anyone available this morning?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-004",
+      "message": "Hello, is anyone available this afternoon?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-005",
+      "message": "Hello, is anyone available at the moment?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-006",
+      "message": "Hello, is anyone available online?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-007",
+      "message": "Hi there, I am checking whether support is online today.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-008",
+      "message": "Hi there, I am checking whether support is online right now.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-009",
+      "message": "Hi there, I am checking whether support is online this morning.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-010",
+      "message": "Hi there, I am checking whether support is online this afternoon.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-011",
+      "message": "Hi there, I am checking whether support is online at the moment.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-012",
+      "message": "Hi there, I am checking whether support is online online.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-013",
+      "message": "Good morning, I would like to start a conversation today.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-014",
+      "message": "Good morning, I would like to start a conversation right now.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-015",
+      "message": "Good morning, I would like to start a conversation this morning.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-016",
+      "message": "Good morning, I would like to start a conversation this afternoon.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-017",
+      "message": "Good morning, I would like to start a conversation at the moment.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-018",
+      "message": "Good morning, I would like to start a conversation online.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-019",
+      "message": "Hey, can someone answer me today?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-020",
+      "message": "Hey, can someone answer me right now?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-021",
+      "message": "Hey, can someone answer me this morning?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-022",
+      "message": "Hey, can someone answer me this afternoon?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-023",
+      "message": "Hey, can someone answer me at the moment?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-024",
+      "message": "Hey, can someone answer me online?",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-025",
+      "message": "Good afternoon, I have just arrived today.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-026",
+      "message": "Good afternoon, I have just arrived right now.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "greeting-027",
+      "message": "Good afternoon, I have just arrived this morning.",
+      "expected_intent": "greeting",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-001",
+      "message": "What is the order status for order A1001?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-002",
+      "message": "What is the order status for my latest order?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-003",
+      "message": "What is the order status for order B2048?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-004",
+      "message": "What is the order status for order C3307?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-005",
+      "message": "What is the order status for order D4412?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-006",
+      "message": "What is the order status for order E5520?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-007",
+      "message": "Could you show the order status for order A1001?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-008",
+      "message": "Could you show the order status for my latest order?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-009",
+      "message": "Could you show the order status for order B2048?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-010",
+      "message": "Could you show the order status for order C3307?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-011",
+      "message": "Could you show the order status for order D4412?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-012",
+      "message": "Could you show the order status for order E5520?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-013",
+      "message": "I need the current order status for order A1001.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-014",
+      "message": "I need the current order status for my latest order.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-015",
+      "message": "I need the current order status for order B2048.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-016",
+      "message": "I need the current order status for order C3307.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-017",
+      "message": "I need the current order status for order D4412.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-018",
+      "message": "I need the current order status for order E5520.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-019",
+      "message": "Please tell me the order status for order A1001.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-020",
+      "message": "Please tell me the order status for my latest order.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-021",
+      "message": "Please tell me the order status for order B2048.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-022",
+      "message": "Please tell me the order status for order C3307.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-023",
+      "message": "Please tell me the order status for order D4412.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-024",
+      "message": "Please tell me the order status for order E5520.",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-025",
+      "message": "Can you check the order status for order A1001?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-026",
+      "message": "Can you check the order status for my latest order?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "order_status-027",
+      "message": "Can you check the order status for order B2048?",
+      "expected_intent": "order_status",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-001",
+      "message": "When will my package arrive for order A1001?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-002",
+      "message": "When will my package arrive for my shipment?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-003",
+      "message": "When will my package arrive for package B2048?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-004",
+      "message": "When will my package arrive for tracking ID TR3307?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-005",
+      "message": "When will my package arrive for parcel D4412?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-006",
+      "message": "When will my package arrive for shipment E5520?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-007",
+      "message": "Can you check the tracking for order A1001?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-008",
+      "message": "Can you check the tracking for my shipment?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-009",
+      "message": "Can you check the tracking for package B2048?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-010",
+      "message": "Can you check the tracking for tracking ID TR3307?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-011",
+      "message": "Can you check the tracking for parcel D4412?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-012",
+      "message": "Can you check the tracking for shipment E5520?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-013",
+      "message": "I need a shipping update for order A1001.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-014",
+      "message": "I need a shipping update for my shipment.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-015",
+      "message": "I need a shipping update for package B2048.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-016",
+      "message": "I need a shipping update for tracking ID TR3307.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-017",
+      "message": "I need a shipping update for parcel D4412.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-018",
+      "message": "I need a shipping update for shipment E5520.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-019",
+      "message": "The delivery for order A1001 has not arrived.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-020",
+      "message": "The delivery for my shipment has not arrived.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-021",
+      "message": "The delivery for package B2048 has not arrived.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-022",
+      "message": "The delivery for tracking ID TR3307 has not arrived.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-023",
+      "message": "The delivery for parcel D4412 has not arrived.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-024",
+      "message": "The delivery for shipment E5520 has not arrived.",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-025",
+      "message": "Where is my parcel associated with order A1001?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-026",
+      "message": "Where is my parcel associated with my shipment?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "logistics-027",
+      "message": "Where is my parcel associated with package B2048?",
+      "expected_intent": "logistics",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "refund-001",
+      "message": "I want a refund for order A1001.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-002",
+      "message": "I want a refund for my recent purchase.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-003",
+      "message": "I want a refund for order B2048.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-004",
+      "message": "I want a refund for this item.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-005",
+      "message": "I want a refund for the returned product.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-006",
+      "message": "I want a refund for order C3307.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-007",
+      "message": "Can I request a refund for order A1001?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-008",
+      "message": "Can I request a refund for my recent purchase?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-009",
+      "message": "Can I request a refund for order B2048?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-010",
+      "message": "Can I request a refund for this item?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-011",
+      "message": "Can I request a refund for the returned product?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-012",
+      "message": "Can I request a refund for order C3307?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-013",
+      "message": "What is the refund process for order A1001?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-014",
+      "message": "What is the refund process for my recent purchase?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-015",
+      "message": "What is the refund process for order B2048?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-016",
+      "message": "What is the refund process for this item?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-017",
+      "message": "What is the refund process for the returned product?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-018",
+      "message": "What is the refund process for order C3307?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-019",
+      "message": "Please explain the refund for order A1001.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-020",
+      "message": "Please explain the refund for my recent purchase.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-021",
+      "message": "Please explain the refund for order B2048.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-022",
+      "message": "Please explain the refund for this item.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-023",
+      "message": "Please explain the refund for the returned product.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-024",
+      "message": "Please explain the refund for order C3307.",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-025",
+      "message": "How long will a refund for order A1001 take?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-026",
+      "message": "How long will a refund for my recent purchase take?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "refund-027",
+      "message": "How long will a refund for order B2048 take?",
+      "expected_intent": "refund",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-001",
+      "message": "I was charged twice for order A1001.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-002",
+      "message": "I was charged twice for my subscription.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-003",
+      "message": "I was charged twice for the recent purchase.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-004",
+      "message": "I was charged twice for this transaction.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-005",
+      "message": "I was charged twice for order B2048.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-006",
+      "message": "I was charged twice for the checkout.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-007",
+      "message": "Why was I charged twice for order A1001?",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-008",
+      "message": "Why was I charged twice for my subscription?",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-009",
+      "message": "Why was I charged twice for the recent purchase?",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-010",
+      "message": "Why was I charged twice for this transaction?",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-011",
+      "message": "Why was I charged twice for order B2048?",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-012",
+      "message": "Why was I charged twice for the checkout?",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-013",
+      "message": "My payment failed for order A1001.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-014",
+      "message": "My payment failed for my subscription.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-015",
+      "message": "My payment failed for the recent purchase.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-016",
+      "message": "My payment failed for this transaction.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-017",
+      "message": "My payment failed for order B2048.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-018",
+      "message": "My payment failed for the checkout.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-019",
+      "message": "The payment failed when I tried order A1001.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-020",
+      "message": "The payment failed when I tried my subscription.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-021",
+      "message": "The payment failed when I tried the recent purchase.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-022",
+      "message": "The payment failed when I tried this transaction.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-023",
+      "message": "The payment failed when I tried order B2048.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-024",
+      "message": "The payment failed when I tried the checkout.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-025",
+      "message": "I need help with a payment failed message for order A1001.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-026",
+      "message": "I need help with a payment failed message for my subscription.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "payment_issue-027",
+      "message": "I need help with a payment failed message for the recent purchase.",
+      "expected_intent": "payment_issue",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "technical_login-001",
+      "message": "I cannot sign in to the mobile app.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-002",
+      "message": "I cannot sign in to my account.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-003",
+      "message": "I cannot sign in to the web portal.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-004",
+      "message": "I cannot sign in to the customer dashboard.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-005",
+      "message": "I cannot sign in to the service.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-006",
+      "message": "I cannot sign in to the admin page.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-007",
+      "message": "Login failed for the mobile app.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-008",
+      "message": "Login failed for my account.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-009",
+      "message": "Login failed for the web portal.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-010",
+      "message": "Login failed for the customer dashboard.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-011",
+      "message": "Login failed for the service.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-012",
+      "message": "Login failed for the admin page.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-013",
+      "message": "The login attempt returned 401 for the mobile app.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-014",
+      "message": "The login attempt returned 401 for my account.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-015",
+      "message": "The login attempt returned 401 for the web portal.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-016",
+      "message": "The login attempt returned 401 for the customer dashboard.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-017",
+      "message": "The login attempt returned 401 for the service.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-018",
+      "message": "The login attempt returned 401 for the admin page.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-019",
+      "message": "I cannot log in to the mobile app.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-020",
+      "message": "I cannot log in to my account.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-021",
+      "message": "I cannot log in to the web portal.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-022",
+      "message": "I cannot log in to the customer dashboard.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-023",
+      "message": "I cannot log in to the service.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-024",
+      "message": "I cannot log in to the admin page.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-025",
+      "message": "I cannot sign in after trying the mobile app.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-026",
+      "message": "I cannot sign in after trying my account.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_login-027",
+      "message": "I cannot sign in after trying the web portal.",
+      "expected_intent": "technical_login",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "invoice-001",
+      "message": "Where can I find the invoice for order A1001?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-002",
+      "message": "Where can I find the invoice for my latest purchase?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-003",
+      "message": "Where can I find the invoice for the subscription?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-004",
+      "message": "Where can I find the invoice for order B2048?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-005",
+      "message": "Where can I find the invoice for this billing period?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-006",
+      "message": "Where can I find the invoice for the recent transaction?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-007",
+      "message": "I need an invoice for order A1001.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-008",
+      "message": "I need an invoice for my latest purchase.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-009",
+      "message": "I need an invoice for the subscription.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-010",
+      "message": "I need an invoice for order B2048.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-011",
+      "message": "I need an invoice for this billing period.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-012",
+      "message": "I need an invoice for the recent transaction.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-013",
+      "message": "Can you send the invoice for order A1001?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-014",
+      "message": "Can you send the invoice for my latest purchase?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-015",
+      "message": "Can you send the invoice for the subscription?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-016",
+      "message": "Can you send the invoice for order B2048?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-017",
+      "message": "Can you send the invoice for this billing period?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-018",
+      "message": "Can you send the invoice for the recent transaction?",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-019",
+      "message": "The invoice for order A1001 is missing.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-020",
+      "message": "The invoice for my latest purchase is missing.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-021",
+      "message": "The invoice for the subscription is missing.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-022",
+      "message": "The invoice for order B2048 is missing.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-023",
+      "message": "The invoice for this billing period is missing.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-024",
+      "message": "The invoice for the recent transaction is missing.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-025",
+      "message": "I need a tax receipt for order A1001.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "invoice-026",
+      "message": "I need a tax receipt for my latest purchase.",
+      "expected_intent": "invoice",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-001",
+      "message": "I saw a suspicious login on my account.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-002",
+      "message": "I saw a suspicious login on the customer profile.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-003",
+      "message": "I saw a suspicious login on the web portal.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-004",
+      "message": "I saw a suspicious login on my user record.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-005",
+      "message": "I saw a suspicious login on the mobile app.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-006",
+      "message": "I saw a suspicious login on the sign-in history.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-007",
+      "message": "Please help with an account hacked alert for my account.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-008",
+      "message": "Please help with an account hacked alert for the customer profile.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-009",
+      "message": "Please help with an account hacked alert for the web portal.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-010",
+      "message": "Please help with an account hacked alert for my user record.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-011",
+      "message": "Please help with an account hacked alert for the mobile app.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-012",
+      "message": "Please help with an account hacked alert for the sign-in history.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-013",
+      "message": "I need to reset password for my account.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-014",
+      "message": "I need to reset password for the customer profile.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-015",
+      "message": "I need to reset password for the web portal.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-016",
+      "message": "I need to reset password for my user record.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-017",
+      "message": "I need to reset password for the mobile app.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-018",
+      "message": "I need to reset password for the sign-in history.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-019",
+      "message": "There is a suspicious login connected to my account.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-020",
+      "message": "There is a suspicious login connected to the customer profile.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-021",
+      "message": "There is a suspicious login connected to the web portal.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-022",
+      "message": "There is a suspicious login connected to my user record.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-023",
+      "message": "There is a suspicious login connected to the mobile app.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-024",
+      "message": "There is a suspicious login connected to the sign-in history.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-025",
+      "message": "Account hacked: security review is needed for my account.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account_security-026",
+      "message": "Account hacked: security review is needed for the customer profile.",
+      "expected_intent": "account_security",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "technical_crash-001",
+      "message": "The app crashed while using the dashboard.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-002",
+      "message": "The app crashed while using the checkout page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-003",
+      "message": "The app crashed while using the mobile app.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-004",
+      "message": "The app crashed while using the latest update.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-005",
+      "message": "The app crashed while using the settings page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-006",
+      "message": "The app crashed while using the upload flow.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-007",
+      "message": "My application crashed during the dashboard.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-008",
+      "message": "My application crashed during the checkout page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-009",
+      "message": "My application crashed during the mobile app.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-010",
+      "message": "My application crashed during the latest update.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-011",
+      "message": "My application crashed during the settings page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-012",
+      "message": "My application crashed during the upload flow.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-013",
+      "message": "The server returned error 500 for the dashboard.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-014",
+      "message": "The server returned error 500 for the checkout page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-015",
+      "message": "The server returned error 500 for the mobile app.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-016",
+      "message": "The server returned error 500 for the latest update.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-017",
+      "message": "The server returned error 500 for the settings page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-018",
+      "message": "The server returned error 500 for the upload flow.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-019",
+      "message": "The page shows 500 when I open the dashboard.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-020",
+      "message": "The page shows 500 when I open the checkout page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-021",
+      "message": "The page shows 500 when I open the mobile app.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-022",
+      "message": "The page shows 500 when I open the latest update.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-023",
+      "message": "The page shows 500 when I open the settings page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-024",
+      "message": "The page shows 500 when I open the upload flow.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-025",
+      "message": "The application has crashed after the dashboard.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical_crash-026",
+      "message": "The application has crashed after the checkout page.",
+      "expected_intent": "technical_crash",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "human_handoff-001",
+      "message": "Connect me to a human about this case.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-002",
+      "message": "Connect me to a human about the unresolved request.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-003",
+      "message": "Connect me to a human about the billing problem.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-004",
+      "message": "Connect me to a human about the repeated failure.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-005",
+      "message": "Connect me to a human about my complaint.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-006",
+      "message": "Connect me to a human about the support issue.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-007",
+      "message": "Please connect me to a human for this case.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-008",
+      "message": "Please connect me to a human for the unresolved request.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-009",
+      "message": "Please connect me to a human for the billing problem.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-010",
+      "message": "Please connect me to a human for the repeated failure.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-011",
+      "message": "Please connect me to a human for my complaint.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-012",
+      "message": "Please connect me to a human for the support issue.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-013",
+      "message": "I want you to connect me to a human about this case.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-014",
+      "message": "I want you to connect me to a human about the unresolved request.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-015",
+      "message": "I want you to connect me to a human about the billing problem.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-016",
+      "message": "I want you to connect me to a human about the repeated failure.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-017",
+      "message": "I want you to connect me to a human about my complaint.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-018",
+      "message": "I want you to connect me to a human about the support issue.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-019",
+      "message": "Send this conversation to a human agent about this case.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-020",
+      "message": "Send this conversation to a human agent about the unresolved request.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-021",
+      "message": "Send this conversation to a human agent about the billing problem.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-022",
+      "message": "Send this conversation to a human agent about the repeated failure.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-023",
+      "message": "Send this conversation to a human agent about my complaint.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-024",
+      "message": "Send this conversation to a human agent about the support issue.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-025",
+      "message": "I need you to connect me to a human representative for this case.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "human_handoff-026",
+      "message": "I need you to connect me to a human representative for the unresolved request.",
+      "expected_intent": "human_handoff",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-001",
+      "message": "Please escalate this issue about the unresolved case.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-002",
+      "message": "Please escalate this issue about the repeated delay.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-003",
+      "message": "Please escalate this issue about the billing exception.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-004",
+      "message": "Please escalate this issue about the failed support process.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-005",
+      "message": "Please escalate this issue about the service problem.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-006",
+      "message": "Please escalate this issue about the open request.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-007",
+      "message": "Escalate this issue concerning the unresolved case.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-008",
+      "message": "Escalate this issue concerning the repeated delay.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-009",
+      "message": "Escalate this issue concerning the billing exception.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-010",
+      "message": "Escalate this issue concerning the failed support process.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-011",
+      "message": "Escalate this issue concerning the service problem.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-012",
+      "message": "Escalate this issue concerning the open request.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-013",
+      "message": "I need you to escalate this issue because of the unresolved case.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-014",
+      "message": "I need you to escalate this issue because of the repeated delay.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-015",
+      "message": "I need you to escalate this issue because of the billing exception.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-016",
+      "message": "I need you to escalate this issue because of the failed support process.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-017",
+      "message": "I need you to escalate this issue because of the service problem.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-018",
+      "message": "I need you to escalate this issue because of the open request.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-019",
+      "message": "Please escalate this issue to a manager about the unresolved case.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-020",
+      "message": "Please escalate this issue to a manager about the repeated delay.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-021",
+      "message": "Please escalate this issue to a manager about the billing exception.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-022",
+      "message": "Please escalate this issue to a manager about the failed support process.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-023",
+      "message": "Please escalate this issue to a manager about the service problem.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-024",
+      "message": "Please escalate this issue to a manager about the open request.",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-025",
+      "message": "Can you escalate this issue for the unresolved case?",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "escalation-026",
+      "message": "Can you escalate this issue for the repeated delay?",
+      "expected_intent": "escalation",
+      "expected_agent": "escalation"
+    },
+    {
+      "case_id": "complaint-001",
+      "message": "This terrible service caused the last request.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-002",
+      "message": "This terrible service caused a long delay.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-003",
+      "message": "This terrible service caused this interaction.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-004",
+      "message": "This terrible service caused the recent case.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-005",
+      "message": "This terrible service caused the support process.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-006",
+      "message": "This terrible service caused the latest response.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-007",
+      "message": "I received terrible service during the last request.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-008",
+      "message": "I received terrible service during a long delay.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-009",
+      "message": "I received terrible service during this interaction.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-010",
+      "message": "I received terrible service during the recent case.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-011",
+      "message": "I received terrible service during the support process.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-012",
+      "message": "I received terrible service during the latest response.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-013",
+      "message": "The terrible service left me waiting for the last request.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-014",
+      "message": "The terrible service left me waiting for a long delay.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-015",
+      "message": "The terrible service left me waiting for this interaction.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-016",
+      "message": "The terrible service left me waiting for the recent case.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-017",
+      "message": "The terrible service left me waiting for the support process.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-018",
+      "message": "The terrible service left me waiting for the latest response.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-019",
+      "message": "This has been terrible service because of the last request.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-020",
+      "message": "This has been terrible service because of a long delay.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-021",
+      "message": "This has been terrible service because of this interaction.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-022",
+      "message": "This has been terrible service because of the recent case.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-023",
+      "message": "This has been terrible service because of the support process.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-024",
+      "message": "This has been terrible service because of the latest response.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-025",
+      "message": "I experienced terrible service with the last request.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "complaint-026",
+      "message": "I experienced terrible service with a long delay.",
+      "expected_intent": "complaint",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-001",
+      "message": "Great service helped me with the recent request.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-002",
+      "message": "Great service helped me with the quick answer.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-003",
+      "message": "Great service helped me with this interaction.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-004",
+      "message": "Great service helped me with the support process.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-005",
+      "message": "Great service helped me with my question.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-006",
+      "message": "Great service helped me with the helpful response.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-007",
+      "message": "I am very satisfied with the recent request.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-008",
+      "message": "I am very satisfied with the quick answer.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-009",
+      "message": "I am very satisfied with this interaction.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-010",
+      "message": "I am very satisfied with the support process.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-011",
+      "message": "I am very satisfied with my question.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-012",
+      "message": "I am very satisfied with the helpful response.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-013",
+      "message": "This was great service for the recent request.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-014",
+      "message": "This was great service for the quick answer.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-015",
+      "message": "This was great service for this interaction.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-016",
+      "message": "This was great service for the support process.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-017",
+      "message": "This was great service for my question.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-018",
+      "message": "This was great service for the helpful response.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-019",
+      "message": "I am satisfied with the recent request.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-020",
+      "message": "I am satisfied with the quick answer.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-021",
+      "message": "I am satisfied with this interaction.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-022",
+      "message": "I am satisfied with the support process.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-023",
+      "message": "I am satisfied with my question.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-024",
+      "message": "I am satisfied with the helpful response.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-025",
+      "message": "The support was great service during the recent request.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "feedback-026",
+      "message": "The support was great service during the quick answer.",
+      "expected_intent": "feedback",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-001",
+      "message": "What is the standard support process for this service?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-002",
+      "message": "What is the standard support process for a routine request?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-003",
+      "message": "What is the standard support process for the support process?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-004",
+      "message": "What is the standard support process for this option?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-005",
+      "message": "What is the standard support process for a standard case?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-006",
+      "message": "What is the standard support process for the next step?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-007",
+      "message": "How does this service work?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-008",
+      "message": "How does a routine request work?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-009",
+      "message": "How does the support process work?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-010",
+      "message": "How does this option work?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-011",
+      "message": "How does a standard case work?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-012",
+      "message": "How does the next step work?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-013",
+      "message": "What does this service mean?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-014",
+      "message": "What does a routine request mean?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-015",
+      "message": "What does the support process mean?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-016",
+      "message": "What does this option mean?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-017",
+      "message": "What does a standard case mean?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-018",
+      "message": "What does the next step mean?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-019",
+      "message": "Where can I find general information about this service?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-020",
+      "message": "Where can I find general information about a routine request?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-021",
+      "message": "Where can I find general information about the support process?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-022",
+      "message": "Where can I find general information about this option?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-023",
+      "message": "Where can I find general information about a standard case?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-024",
+      "message": "Where can I find general information about the next step?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-025",
+      "message": "When is this service normally available?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "query-026",
+      "message": "When is a routine request normally available?",
+      "expected_intent": "query",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-001",
+      "message": "Please help me with the next step.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-002",
+      "message": "Please help me with a routine support request.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-003",
+      "message": "Please help me with this case.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-004",
+      "message": "Please help me with my general request.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-005",
+      "message": "Please help me with the setup.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-006",
+      "message": "Please help me with the process.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-007",
+      "message": "I need assistance with the next step.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-008",
+      "message": "I need assistance with a routine support request.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-009",
+      "message": "I need assistance with this case.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-010",
+      "message": "I need assistance with my general request.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-011",
+      "message": "I need assistance with the setup.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-012",
+      "message": "I need assistance with the process.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-013",
+      "message": "Please handle the next step for me.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-014",
+      "message": "Please handle a routine support request for me.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-015",
+      "message": "Please handle this case for me.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-016",
+      "message": "Please handle my general request for me.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-017",
+      "message": "Please handle the setup for me.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-018",
+      "message": "Please handle the process for me.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-019",
+      "message": "I need help with the next step.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-020",
+      "message": "I need help with a routine support request.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-021",
+      "message": "I need help with this case.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-022",
+      "message": "I need help with my general request.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-023",
+      "message": "I need help with the setup.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-024",
+      "message": "I need help with the process.",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-025",
+      "message": "Could you assist me with the next step?",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "request-026",
+      "message": "Could you assist me with a routine support request?",
+      "expected_intent": "request",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "technical-001",
+      "message": "I have a technical issue with the service.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-002",
+      "message": "I have a technical issue with a configuration.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-003",
+      "message": "I have a technical issue with the application.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-004",
+      "message": "I have a technical issue with my workspace.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-005",
+      "message": "I have a technical issue with the current setup.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-006",
+      "message": "I have a technical issue with a system component.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-007",
+      "message": "I need technical support for the service.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-008",
+      "message": "I need technical support for a configuration.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-009",
+      "message": "I need technical support for the application.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-010",
+      "message": "I need technical support for my workspace.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-011",
+      "message": "I need technical support for the current setup.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-012",
+      "message": "I need technical support for a system component.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-013",
+      "message": "This is a technical issue affecting the service.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-014",
+      "message": "This is a technical issue affecting a configuration.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-015",
+      "message": "This is a technical issue affecting the application.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-016",
+      "message": "This is a technical issue affecting my workspace.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-017",
+      "message": "This is a technical issue affecting the current setup.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-018",
+      "message": "This is a technical issue affecting a system component.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-019",
+      "message": "Could technical support review the service?",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-020",
+      "message": "Could technical support review a configuration?",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-021",
+      "message": "Could technical support review the application?",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-022",
+      "message": "Could technical support review my workspace?",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-023",
+      "message": "Could technical support review the current setup?",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-024",
+      "message": "Could technical support review a system component?",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-025",
+      "message": "I am reporting a technical issue with the service.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "technical-026",
+      "message": "I am reporting a technical issue with a configuration.",
+      "expected_intent": "technical",
+      "expected_agent": "technical"
+    },
+    {
+      "case_id": "billing-001",
+      "message": "I have a billing question about this month.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-002",
+      "message": "I have a billing question about my plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-003",
+      "message": "I have a billing question about the current cycle.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-004",
+      "message": "I have a billing question about the account.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-005",
+      "message": "I have a billing question about the service.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-006",
+      "message": "I have a billing question about a recurring plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-007",
+      "message": "I need information about my subscription this month.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-008",
+      "message": "I need information about my subscription my plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-009",
+      "message": "I need information about my subscription the current cycle.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-010",
+      "message": "I need information about my subscription the account.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-011",
+      "message": "I need information about my subscription the service.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-012",
+      "message": "I need information about my subscription a recurring plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-013",
+      "message": "I need billing details for this month.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-014",
+      "message": "I need billing details for my plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-015",
+      "message": "I need billing details for the current cycle.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-016",
+      "message": "I need billing details for the account.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-017",
+      "message": "I need billing details for the service.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-018",
+      "message": "I need billing details for a recurring plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-019",
+      "message": "I want to understand my billing cycle for this month.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-020",
+      "message": "I want to understand my billing cycle for my plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-021",
+      "message": "I want to understand my billing cycle for the current cycle.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-022",
+      "message": "I want to understand my billing cycle for the account.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-023",
+      "message": "I want to understand my billing cycle for the service.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-024",
+      "message": "I want to understand my billing cycle for a recurring plan.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-025",
+      "message": "The billing section for this month needs an explanation.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "billing-026",
+      "message": "The billing section for my plan needs an explanation.",
+      "expected_intent": "billing",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-001",
+      "message": "I want to change my email address for my profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-002",
+      "message": "I want to change my email address for this account.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-003",
+      "message": "I want to change my email address for the customer record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-004",
+      "message": "I want to change my email address for my sign-in profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-005",
+      "message": "I want to change my email address for the user record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-006",
+      "message": "I want to change my email address for my contact details.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-007",
+      "message": "I need to update my profile information for my profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-008",
+      "message": "I need to update my profile information for this account.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-009",
+      "message": "I need to update my profile information for the customer record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-010",
+      "message": "I need to update my profile information for my sign-in profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-011",
+      "message": "I need to update my profile information for the user record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-012",
+      "message": "I need to update my profile information for my contact details.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-013",
+      "message": "My account details should be changed for my profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-014",
+      "message": "My account details should be changed for this account.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-015",
+      "message": "My account details should be changed for the customer record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-016",
+      "message": "My account details should be changed for my sign-in profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-017",
+      "message": "My account details should be changed for the user record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-018",
+      "message": "My account details should be changed for my contact details.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-019",
+      "message": "I want to edit the personal information for my profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-020",
+      "message": "I want to edit the personal information for this account.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-021",
+      "message": "I want to edit the personal information for the customer record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-022",
+      "message": "I want to edit the personal information for my sign-in profile.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-023",
+      "message": "I want to edit the personal information for the user record.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-024",
+      "message": "I want to edit the personal information for my contact details.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-025",
+      "message": "The email address on my profile is outdated.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "account-026",
+      "message": "The email address on this account is outdated.",
+      "expected_intent": "account",
+      "expected_agent": "billing"
+    },
+    {
+      "case_id": "other-001",
+      "message": "The blue notebook is on the wooden desk today.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-002",
+      "message": "The blue notebook is on the wooden desk this morning.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-003",
+      "message": "The blue notebook is on the wooden desk near the entrance.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-004",
+      "message": "The blue notebook is on the wooden desk after lunch.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-005",
+      "message": "The blue notebook is on the wooden desk on the second floor.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-006",
+      "message": "The blue notebook is on the wooden desk before sunset.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-007",
+      "message": "The weekend market opens at noon today.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-008",
+      "message": "The weekend market opens at noon this morning.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-009",
+      "message": "The weekend market opens at noon near the entrance.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-010",
+      "message": "The weekend market opens at noon after lunch.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-011",
+      "message": "The weekend market opens at noon on the second floor.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-012",
+      "message": "The weekend market opens at noon before sunset.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-013",
+      "message": "A small plant sits beside the window today.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-014",
+      "message": "A small plant sits beside the window this morning.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-015",
+      "message": "A small plant sits beside the window near the entrance.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-016",
+      "message": "A small plant sits beside the window after lunch.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-017",
+      "message": "A small plant sits beside the window on the second floor.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-018",
+      "message": "A small plant sits beside the window before sunset.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-019",
+      "message": "The morning train passed the station today.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-020",
+      "message": "The morning train passed the station this morning.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-021",
+      "message": "The morning train passed the station near the entrance.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-022",
+      "message": "The morning train passed the station after lunch.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-023",
+      "message": "The morning train passed the station on the second floor.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-024",
+      "message": "The morning train passed the station before sunset.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-025",
+      "message": "The lamp is next to the bookshelf today.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    },
+    {
+      "case_id": "other-026",
+      "message": "The lamp is next to the bookshelf this morning.",
+      "expected_intent": "other",
+      "expected_agent": "general"
+    }
+  ],
+  "retrieval_cases": []
+}

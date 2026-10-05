@@ -68,6 +68,21 @@ class SkillLoaderTests(unittest.TestCase):
 
         self.assertEqual([document.name for document in selected], ["billing"])
 
+    def test_explicit_intent_selected_skill_does_not_require_keyword_repeat(self) -> None:
+        selected = self.loader.select_for_agent(
+            "billing",
+            "I need my money back.",
+            ["billing"],
+            require_keyword_match=False,
+        )
+
+        self.assertEqual([document.name for document in selected], ["billing"])
+
+    def test_explicit_empty_selection_does_not_discover_all_skills(self) -> None:
+        selected = self.loader.select_for_agent("billing", "I need a refund", [])
+
+        self.assertEqual(selected, [])
+
     def test_reload_reads_changed_content(self) -> None:
         path = Path(self.temp_dir.name) / "billing" / "SKILL.md"
         self.assertIn("verified billing facts", self.loader.load("billing").content)

@@ -13,9 +13,16 @@ from uuid import uuid4
 from agents.customer_service_agent import CustomerServiceAgent
 from agents.escalation_agent import EscalationAgent
 from agents.response_composer import ResponseComposer
-from core.intent_recognizer import IntentCategory, IntentRecognizer, IntentResult, UrgencyLevel
+from core.intent_recognizer import (
+    IntentCategory,
+    IntentRecognizer,
+    IntentResult,
+    IntentSubtask,
+    UrgencyLevel,
+)
 from core.llm_utils import LLMConfigurationError, LLMRequestError
 from harness.trace import TraceEventType
+from schemas.context import ContextMessage
 
 
 logger = logging.getLogger(__name__)
@@ -200,7 +207,20 @@ class AgentOrchestrator:
                 "confidence": analysis.confidence,
                 "urgency": analysis.urgency.value,
                 "should_use_rag": analysis.should_use_rag,
+                "information_need": analysis.information_need,
+                "planned_tool_name": analysis.planned_tool_name,
+                "ambiguity_reasons": analysis.ambiguity_reasons,
+                "topic_evidence": analysis.topic_evidence,
                 "entities": analysis.entities,
+                "subtasks": [
+                    {
+                        "domain": task.domain,
+                        "intent": task.intent.value,
+                        "information_need": task.information_need,
+                        "query_length": len(task.query),
+                    }
+                    for task in analysis.subtasks
+                ],
             },
         )
         if self._needs_clarification(analysis, message):
@@ -216,13 +236,7 @@ class AgentOrchestrator:
                 conversation_id=conversation_id,
                 data={"agent_count": 0, "clarification": True},
             )
-            self._record_trace(
-                TraceEventType.REQUEST_COMPLETED,
-                request_id=request_id,
-                conversation_id=conversation_id,
-                data={"status": "clarification"},
-            )
-            return OrchestratorResult(
+            result = OrchestratorResult(
                 request_id=request_id,
                 response=(
                     "I am not yet sure which issue you want to handle. "
@@ -235,6 +249,16 @@ class AgentOrchestrator:
                 routing_confidence=analysis.confidence,
                 latency_ms=(time.monotonic() - started) * 1000,
             )
+            await self._persist_final_turn(
+                user_id, conversation_id, message, result.response, analysis, request_id
+            )
+            self._record_trace(
+                TraceEventType.REQUEST_COMPLETED,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                data={"status": "clarification"},
+            )
+            return result
 
         decision = self._make_decision(analysis)
         self._record_trace(
@@ -290,6 +314,9 @@ class AgentOrchestrator:
                     "escalation_source": escalation_source,
                 },
             )
+            await self._persist_final_turn(
+                user_id, conversation_id, message, response_text, analysis, request_id
+            )
             self._record_trace(
                 TraceEventType.REQUEST_COMPLETED,
                 request_id=request_id,
@@ -334,7 +361,7 @@ class AgentOrchestrator:
                 conversation_id=conversation_id,
                 request_id=request_id,
                 memory_context=memory_context,
-                persist=False,
+                persist=True,
             )
         if not response.success:
             self._record_trace(
@@ -364,6 +391,9 @@ class AgentOrchestrator:
                 "escalation_reason": escalation_reason,
                 "escalation_source": escalation_source,
             },
+        )
+        await self._persist_final_turn(
+            user_id, conversation_id, message, response_text, analysis, request_id
         )
         self._record_trace(
             TraceEventType.REQUEST_COMPLETED,
@@ -399,21 +429,24 @@ class AgentOrchestrator:
     ) -> list[AgentResponse]:
         """Run the primary Agent and supporting Agents concurrently."""
 
-        tasks = [
-            self._execute(
-                agent_type,
-                message,
-                analysis,
-                decision,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                request_id=request_id,
-                memory_context=memory_context,
-                persist=agent_type == decision.primary_agent,
+        calls = []
+        for agent_type in decision.agent_types:
+            task = self._task_for(analysis, agent_type)
+            calls.append(
+                self._execute(
+                    agent_type,
+                    (task.query if task else message),
+                    analysis,
+                    decision,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    request_id=request_id,
+                    memory_context=memory_context,
+                    persist=agent_type == decision.primary_agent,
+                    task=task,
+                )
             )
-            for agent_type in decision.agent_types
-        ]
-        return list(await asyncio.gather(*tasks))
+        return list(await asyncio.gather(*calls))
 
     async def _execute(
         self,
@@ -427,6 +460,7 @@ class AgentOrchestrator:
         request_id: str,
         memory_context: dict[str, object] | None,
         persist: bool,
+        task: IntentSubtask | None = None,
     ) -> AgentResponse:
         """Execute one Agent and update local performance statistics."""
 
@@ -452,22 +486,35 @@ class AgentOrchestrator:
             request_id=request_id,
             conversation_id=conversation_id,
             agent_name=agent_type.value,
-            data={"persist": persist},
+            data={
+                "persist": persist,
+                "delegated_subtask": task is not None,
+                "task_intent": task.intent.value if task else analysis.intent.value,
+                "query_length": len(message),
+            },
         )
         try:
+            task_intent = task.intent if task else analysis.intent
+            task_entities = task.entities if task else analysis.entities
+            information_need = task.information_need if task else analysis.information_need
             content = await agent.respond(
                 message,
                 user_id=user_id,
                 conversation_id=conversation_id,
                 request_id=request_id,
                 memory_context=memory_context,
-                skill_names=self._skills_for(agent_type, analysis.intent),
-                knowledge_enabled=decision.use_rag,
-                intent=analysis.intent.value,
+                skill_names=self._skills_for(agent_type, task_intent),
+                knowledge_enabled=(task.should_use_rag if task else decision.use_rag),
+                planned_tool_name=(
+                    (task.planned_tool_name if task else analysis.planned_tool_name)
+                    if agent_type == AgentType.GENERAL else None
+                ),
+                information_need=information_need,
+                intent=task_intent.value,
                 intent_group=analysis.intent_group,
                 intent_confidence=analysis.confidence,
                 urgency=analysis.urgency.value,
-                entities=analysis.entities,
+                entities=task_entities,
                 supporting_agents=[
                     item.value
                     for item in decision.supporting_agents
@@ -475,6 +522,8 @@ class AgentOrchestrator:
                 ],
                 routing_reason=decision.reason,
                 persist=persist,
+                persist_conversation=False,
+                task_scoped=task is not None,
             )
         except Exception as exc:
             elapsed = (time.monotonic() - started) * 1000
@@ -552,9 +601,12 @@ class AgentOrchestrator:
                 score_by_type.items(), key=lambda item: item[1], reverse=True
             )
             if agent_type != primary_agent
-            and agent_type != AgentType.GENERAL
             and score >= 0.45
             and score >= primary_score * 0.55
+            and (
+                analysis.supporting_domains is None
+                or agent_type.value in analysis.supporting_domains
+            )
         ]
         score_text = ", ".join(
             f"{agent_type.value}={score:.2f}"
@@ -573,6 +625,15 @@ class AgentOrchestrator:
             reason=reason,
             confidence=round(max(analysis.confidence, primary_score), 3),
             use_rag=analysis.should_use_rag,
+        )
+
+    @staticmethod
+    def _task_for(analysis: IntentResult, agent_type: AgentType) -> IntentSubtask | None:
+        """Return the domain-scoped query assigned to one Agent, if available."""
+
+        return next(
+            (task for task in analysis.subtasks if task.domain == agent_type.value),
+            None,
         )
 
     def _best_agent(
@@ -596,9 +657,7 @@ class AgentOrchestrator:
             return ["technical"]
         if agent_type == AgentType.BILLING and intent in {
             IntentCategory.REFUND,
-            IntentCategory.INVOICE,
             IntentCategory.PAYMENT_ISSUE,
-            IntentCategory.BILLING,
         }:
             return ["refund"]
         if agent_type == AgentType.GENERAL and intent in {
@@ -661,6 +720,44 @@ class AgentOrchestrator:
         for response in responses:
             if isinstance(response.error, (LLMConfigurationError, LLMRequestError)):
                 raise response.error
+
+    async def _persist_final_turn(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message: str,
+        response: str,
+        analysis: IntentResult,
+        request_id: str,
+    ) -> None:
+        """Store exactly the user turn and final reply visible to the client."""
+
+        memory = self._pool[AgentType.GENERAL][0].memory
+        if memory is None:
+            return
+        await memory.add_message(
+            user_id,
+            conversation_id,
+            ContextMessage(role="user", content=message.strip()),
+            compact=False,
+        )
+        await memory.add_message(
+            user_id,
+            conversation_id,
+            ContextMessage(role="assistant", content=response),
+        )
+        await memory.update_profile(
+            user_id,
+            conversation_id,
+            message=message.strip(),
+            entities=analysis.entities,
+        )
+        self._record_trace(
+            TraceEventType.MEMORY_UPDATED,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            data={"conversation_persisted": True, "final_response": True},
+        )
 
     def get_stats(self) -> dict[str, dict[str, Any]]:
         """Expose per-Agent statistics and profile metadata to Monitor/API."""

@@ -25,6 +25,8 @@ from evaluation.evaluator import (
     EndToEndEvaluator,
     IntentTestCase,
 )
+from evaluation.models import RetrievalCase
+from evaluation.runner import evaluate_retrieval_cases
 from harness.runtime import HarnessRuntime
 from harness.trace import TraceRecorder
 from knowledge import KnowledgeBaseError
@@ -569,7 +571,7 @@ async def run_evaluation(
     request: Request,
     body: EvalRunInput | None = None,
 ) -> dict[str, object]:
-    """Run the Intent and end-to-end Evaluation suite."""
+    """Run Intent, dialog, and optional live RAG Evaluation cases."""
 
     evaluator: EndToEndEvaluator | None = getattr(
         request.app.state,
@@ -605,7 +607,26 @@ async def run_evaluation(
         intent_cases=intent_cases,
         dialog_cases=dialog_cases,
     )
-    return report.to_dict()
+    output = report.to_dict()
+
+    if body and body.retrieval_cases is not None:
+        retrieval_cases = [
+            RetrievalCase(
+                case_id=item.case_id,
+                query=item.query,
+                relevant_chunk_ids=tuple(item.relevant_chunk_ids),
+                top_k=item.top_k,
+            )
+            for item in body.retrieval_cases
+        ]
+        retrieval_report = await evaluate_retrieval_cases(
+            retrieval_cases,
+            request.app.state.tool_manager.search_with_rewrite,
+            name="live-rag-retrieval",
+        )
+        output["retrieval"] = retrieval_report.to_dict()
+
+    return output
 
 
 @app.get("/tools/stats")
